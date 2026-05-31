@@ -1,33 +1,41 @@
+# Ambiente Python (si ricrea con pip install)
 env/
 .env/
-env/
-models/
-cache/
 __pycache__/
-*secret*
+
+# File pesanti / dati (stanno su Drive)
+models/
 data/
+etsi-dataset/
+
+# Cache (si rigenera, effimera)
+cache/
 *cache
-*cache
+*.pkl
+*.db
+
+# Risultati e file temporanei (output dei run)
 results/
+tmp.*
+*.tmp
+*.tmp.*
+*.jsonl
+state.json
+
+# Segreti (MAI su GitHub)
+*secret*
+*.env
+*.secrets.env
+secrets.env
+
+# File generati (grafici e LaTeX)
+*.png
+*.jpg
+*.PNG
+*.pdf
 *.aux
 *.bbl
 *.blg
 *.fdb_latexmk
 *.fls
 *.log
-*.png
-*.jpg
-*.PNG
-*.pdf
-*.env
-tmp.*
-*.tmp
-etsi-dataset/
-*.tmp.*
-state.json
-*.jsonl
-*.pkl
-*.db
-results/
-*.secrets.env
-secrets.env
