@@ -8,11 +8,12 @@ Pipeline
 1. Estrazione  — pdfplumber per tutto. Per ogni pagina:
    · Trova le tabelle valide (>= 2 colonne).
    · Testo narrativo: page.filter() esclude i caratteri nelle bbox
-     delle tabelle → testo pulito senza frammenti di celle.
+     delle tabelle → righe pulite senza frammenti di celle.
    · Testo tabellare: righe "col1 | col2 | col3".
+   · Righe narrative e tabelle vengono fuse e ordinate per posizione
+     verticale (top), così l'ordine di lettura del documento è preservato
+     anche quando una tabella e del testo coesistono sulla stessa pagina.
    · Pagine senza tabelle: page.extract_text() direttamente.
-   Usando una sola libreria il formato del testo è sempre coerente,
-   eliminando i problemi di mismatch tra fitz e pdfplumber.
 
 2. Pulizia     — su ogni pagina di contenuto:
    a) righe ricorrenti >= 50% delle pagine → solo prima occorrenza
@@ -40,6 +41,7 @@ Genericità: nessuna stringa specifica del documento è hardcodata.
 
 import re
 import json
+import argparse
 from collections import Counter
 
 import pdfplumber
@@ -48,9 +50,6 @@ import pdfplumber
 # ===========================================================================
 # PARAMETRI
 # ===========================================================================
-
-PDF_PATH    = r'C:\Users\campa\Desktop\materiale tesi\ISP-18 Rifornimento carburante Agg19 01.04.2025.pdf'
-OUTPUT_PATH = 'datasets/corpus_prof.json'
 
 TABLE_MIN_COLS           = 2
 RECURRING_PAGE_FRACTION  = 0.5
@@ -80,11 +79,40 @@ SEC_RE = re.compile(
 # ===========================================================================
 
 def _table_to_text(table: list[list[str | None]]) -> str:
-    """Converte una tabella pdfplumber in righe 'col1 | col2 | col3'."""
-    lines = []
+    """
+    Converte una tabella pdfplumber in righe 'col1 | col2 | col3'.
+
+    pdfplumber spezza una cella che va a capo in più righe-tabella con le prime
+    colonne vuote (es. ['', '', '', 'continua']). Una riga con prima cella vuota
+    è quindi la continuazione di quella precedente: le sue celle vengono fuse
+    colonna per colonna. Così si ricompongono i passi multi-linea e gli header
+    spezzati (rendendoli deduplicabili). Le celle vuote in coda sono rimosse per
+    non lasciare pipe spurie ('X |  |  | ').
+    """
+    merged: list[list[str]] = []
     for row in table:
         cells = [(c.replace('\n', ' ').strip() if c else '') for c in row]
-        if any(cells):
+        if not any(cells):
+            continue
+        # Continuazione: prima cella vuota e c'è una riga a cui agganciarsi
+        if merged and not cells[0]:
+            prev = merged[-1]
+            for i, c in enumerate(cells):
+                if not c:
+                    continue
+                if i < len(prev):
+                    prev[i] = (prev[i] + ' ' + c).strip()
+                else:
+                    prev.append(c)
+        else:
+            merged.append(cells)
+
+    lines = []
+    for cells in merged:
+        # Rimuovi celle vuote in coda (mantieni quelle vuote interne per allineamento)
+        while cells and not cells[-1]:
+            cells.pop()
+        if cells:
             lines.append(' | '.join(cells))
     return '\n'.join(lines)
 
@@ -108,11 +136,11 @@ def extract_pages_text(pdf_path: str) -> list[str]:
     """
     Restituisce una stringa di testo per ogni pagina del PDF.
 
-    Per pagine senza tabelle: testo estratto con pdfplumber direttamente.
-    Per pagine con tabelle valide (>= TABLE_MIN_COLS colonne):
-      · Narrativo: page.filter() esclude i caratteri nelle bbox tabellari,
-        poi extract_text() sul risultato → testo pulito senza frammenti.
-      · Tabelle: testo in formato 'col1 | col2 | col3'.
+    Pagine senza tabelle: page.extract_text() diretto.
+    Pagine con tabelle: righe narrative (escludendo i caratteri nelle bbox) e
+    blocchi tabellari vengono raccolti con la loro coordinata verticale (top) e
+    ordinati per posizione, così l'ordine di lettura resta corretto anche quando
+    tabella e testo coesistono sulla stessa pagina.
     """
     pages_text: list[str] = []
 
@@ -129,17 +157,27 @@ def extract_pages_text(pdf_path: str) -> list[str]:
                 pages_text.append(page.extract_text() or '')
                 continue
 
-            # Testo narrativo: escludi caratteri dentro le bbox tabellari
+            # Blocchi posizionati: (top, testo).
             bboxes = [bbox for bbox, _ in valid]
-            narrative = (
+            blocks: list[tuple[float, str]] = []
+
+            # Tabelle: ancorate al top della bbox (bbox = x0, top, x1, bottom)
+            for bbox, data in valid:
+                table_text = _table_to_text(data)
+                if table_text.strip():
+                    blocks.append((bbox[1], table_text))
+
+            # Righe narrative: escludi i caratteri dentro le bbox tabellari
+            narrative_lines = (
                 page.filter(lambda obj: _not_in_bbox(obj, bboxes))
-                .extract_text()
-            ) or ''
+                .extract_text_lines()
+            )
+            for line in narrative_lines:
+                if line['text'].strip():
+                    blocks.append((line['top'], line['text']))
 
-            # Testo tabellare in formato pipe
-            tables_text = '\n'.join(_table_to_text(data) for _, data in valid)
-
-            pages_text.append(narrative + '\n' + tables_text)
+            blocks.sort(key=lambda b: b[0])
+            pages_text.append('\n'.join(text for _, text in blocks))
 
     return pages_text
 
@@ -253,7 +291,7 @@ UNNUMBERED_SEC_RE = re.compile(
 )
 
 
-def detect_sections(pages_text: list[str]) -> list[tuple[int, str, int]]:
+def detect_sections(pages_text: list[str], max_section_num: int = MAX_SECTION_NUM) -> list[tuple[int, str, int]]:
     """
     Scansiona il testo di ogni pagina cercando due tipi di intestazione:
 
@@ -270,12 +308,12 @@ def detect_sections(pages_text: list[str]) -> list[tuple[int, str, int]]:
     quindi NON corrispondono ai pattern e non vengono catturati lì —
     viene catturata solo l'occorrenza nel corpo del documento.
 
-    is_informative si occupa di filtrare le sezioni risultanti che
-    non hanno contenuto sufficiente (INDICE, LISTA DEGLI ACRONIMI, ecc.).
+    Le sezioni senza contenuto sufficiente (INDICE, acronimi, ecc.) vengono poi
+    scartate da is_informative.
 
-    Restituisce [(numero, titolo, indice_pagina)] ordinato per pagina.
-    I titoli non numerati ricevono un numero convenzionale (1000+pagina)
-    usato solo per l'ordinamento, non visibile nel corpus finale.
+    Restituisce [(numero, titolo, indice_pagina)] ordinato per pagina. I titoli
+    non numerati ricevono un numero convenzionale (1000+pagina) per il solo
+    ordinamento, non visibile nel corpus finale.
     """
     numbered:   dict[int, tuple[int, str, int]] = {}
     unnumbered: dict[str, tuple[int, str, int]] = {}
@@ -286,7 +324,7 @@ def detect_sections(pages_text: list[str]) -> list[tuple[int, str, int]]:
         for m in SEC_RE.finditer(page_text):
             num   = int(m.group(1))
             title = m.group(2).strip()
-            if num > MAX_SECTION_NUM or len(title) < 3:
+            if num > max_section_num or len(title) < 3:
                 continue
             numbered[num] = (num, title, page_idx)
 
@@ -310,12 +348,19 @@ def detect_sections(pages_text: list[str]) -> list[tuple[int, str, int]]:
 def is_informative(text: str) -> bool:
     """True se la sezione ha contenuto sufficiente per il forge di SD-RAG."""
     words = text.split()
-    if len(words) < MIN_WORDS or not text:
+    if len(words) < MIN_WORDS:
         return False
     if (text.count('...') * 3) / len(text) > DOTS_RATIO_MAX:
         return False
     non_empty = [l for l in text.split('\n') if l.strip()]
-    return bool(non_empty) and len(words) / len(non_empty) >= AVG_WORDS_MIN
+    if not non_empty:
+        return False
+    # Escludi righe pipe dal denominatore: hanno ~3-5 parole per riga e
+    # abbasserebbero la media penalizzando sezioni procedurali a struttura tabellare
+    narrative_lines = [l for l in non_empty if ' | ' not in l]
+    if not narrative_lines:
+        return True  # sezione puramente tabellare con abbastanza parole
+    return len(words) / len(narrative_lines) >= AVG_WORDS_MIN
 
 
 # ===========================================================================
@@ -413,8 +458,19 @@ def save_corpus(corpus: dict[str, str], output_path: str) -> None:
 # ===========================================================================
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Estrae testo da un PDF strutturato e produce un corpus JSON per SD-RAG.'
+    )
+    parser.add_argument('pdf', help='Percorso del file PDF da elaborare')
+    parser.add_argument('output', help='Percorso del file JSON di output')
+    parser.add_argument(
+        '--max-sections', type=int, default=MAX_SECTION_NUM,
+        help=f'Numero massimo di sezione principale (default: {MAX_SECTION_NUM})'
+    )
+    args = parser.parse_args()
+
     print('1. Estrazione testo...')
-    pages_text = extract_pages_text(PDF_PATH)
+    pages_text = extract_pages_text(args.pdf)
     table_pages = sum(1 for p in pages_text if ' | ' in p)
     print(f'   Pagine: {len(pages_text)}  |  con tabelle: {table_pages}')
 
@@ -423,19 +479,18 @@ if __name__ == '__main__':
     print(f'   Caratteri totali: {sum(len(p) for p in cleaned_pages)}')
 
     print('3. Rilevamento sezioni (su testo pulito)...')
-    sections = detect_sections(cleaned_pages)
+    sections = detect_sections(cleaned_pages, max_section_num=args.max_sections)
     print(f'   Sezioni rilevate: {len(sections)}')
     for num, title, pg in sections:
         print(f'      SEC {num:2d}  pag={pg:3d}  "{title[:55]}"')
-
 
     print('4. Costruzione corpus...')
     corpus = build_corpus(cleaned_pages, sections)
     print(f'   Mantenute: {len(corpus)}  |  Scartate: {len(sections) - len(corpus)}')
     for title, body in corpus.items():
-        print(f'      ✓  "{title[:55]}"  ({len(body.split())} parole)')
+        print(f'      OK  "{title[:55]}"  ({len(body.split())} parole)')
 
     print('5. Salvataggio corpus...')
-    save_corpus(corpus, OUTPUT_PATH)
-    print(f'   Salvato in: {OUTPUT_PATH}')
+    save_corpus(corpus, args.output)
+    print(f'   Salvato in: {args.output}')
     print('OK')

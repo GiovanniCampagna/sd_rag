@@ -60,8 +60,19 @@ def _split_sentences(text: str) -> List[str]:
     - Abbreviazioni comuni (par., art., n., cfr., D.Lgs., S.p.A. ecc.)
       che non devono spezzare la frase
     - Separatori di paragrafo (\\n\\n) come confini duri tra frasi
+    - Righe pipe (col1 | col2 | col3) trattate come unità atomiche:
+      ogni riga pipe diventa il proprio paragrafo così non viene mai
+      fusa con la riga successiva dal collasso dei soft wrap
     """
     text = text.strip()
+    # Righe pipe → confini duri (ogni riga pipe resta atomica)
+    lines = text.split('\n')
+    normalized: List[str] = []
+    for line in lines:
+        normalized.append(line)
+        if ' | ' in line:
+            normalized.append('')
+    text = '\n'.join(normalized)
     # Proteggi i parabreak prima di collassare i soft wrap
     text = re.sub(r'\n{2,}', '\x00', text)
     text = text.replace('\n', ' ')
