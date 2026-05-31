@@ -39,10 +39,49 @@ def _word_count(s: str) -> int:
     return len(s.split())
 
 
+
+# Abbreviazioni comuni nei documenti procedurali/normativi italiani che non devono
+# triggerare un taglio di frase (es. "par. 3.2", "art. 4", "Reg. (UE) n. 139/2014").
+_ABBREV_RE = re.compile(
+    r'\b(par|art|n|cfr|rev|agg|es|ecc|pag|fig|tab|vol|vs|all|lett|comma|cap|sez|'
+    r'p\.es|S\.p\.A|S\.r\.l|S\.n\.c|S\.a\.s|D\.Lgs|D\.M|D\.P\.R|L)\.'
+    r'(?=\s)',
+    re.IGNORECASE,
+)
+_SENTENCE_RE = re.compile(r'(?<=[.!?])\s+(?=[A-ZÀÈÌÒÙÁÉÍÓÚ\d\"])')
+
+
 def _split_sentences(text: str) -> List[str]:
-    """Minimal sentence splitter (no NLP dependency)."""
-    parts = re.split(r'(?<=[.!?])\s+(?=[A-ZÀÈÌÒÙÁÉÍÓÚ\d])', text.strip())
-    return [p.strip() for p in parts if p.strip()]
+    """
+    Sentence splitter condiviso da tutti i chunker.
+
+    Gestisce:
+    - Soft line-wrap da PDF (singolo \\n dentro una frase → spazio)
+    - Abbreviazioni comuni (par., art., n., cfr., D.Lgs., S.p.A. ecc.)
+      che non devono spezzare la frase
+    - Separatori di paragrafo (\\n\\n) come confini duri tra frasi
+    """
+    text = text.strip()
+    # Proteggi i parabreak prima di collassare i soft wrap
+    text = re.sub(r'\n{2,}', '\x00', text)
+    text = text.replace('\n', ' ')
+    text = text.replace('\x00', '\n\n')
+
+    # Maschera temporaneamente i punti di abbreviazione con un placeholder
+    # in modo che il pattern di frase non ci cada sopra
+    text = _ABBREV_RE.sub(lambda m: m.group(0)[:-1] + '\x01', text)
+
+    result: List[str] = []
+    for para in text.split('\n\n'):
+        para = para.strip()
+        if not para:
+            continue
+        for sent in _SENTENCE_RE.split(para):
+            sent = sent.replace('\x01', '.').strip()
+            if sent:
+                result.append(sent)
+
+    return result
 
 
 def _split_by_paragraphs(text: str, max_words: int) -> List[str]:

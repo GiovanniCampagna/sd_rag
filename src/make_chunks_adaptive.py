@@ -23,6 +23,8 @@ from make_chunks_structural import (
     _detect_sections,
     _word_count,
     _split_sentences,
+    _NUMBERED_HEADING_RE as _NHR,
+    _ALLCAPS_HEADING_RE as _AHR,
 )
 from make_chunks_semantic import _semantic_subsplit
 
@@ -326,7 +328,6 @@ def make_chunks_adaptive(
             # Rimuovi la riga di intestazione dal body (evita classificazione errata)
             block_lines = block.split('\n')
             if len(block_lines) > 1:
-                from make_chunks_structural import _NUMBERED_HEADING_RE as _NHR, _ALLCAPS_HEADING_RE as _AHR
                 first = block_lines[0].strip()
                 if _NHR.match(first) or _AHR.match(first):
                     body = '\n'.join(block_lines[1:]).strip()

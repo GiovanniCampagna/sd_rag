@@ -51,14 +51,13 @@ def make_chunks(text:str, size:int, overlap:int=0):
     if current_chunk:
         chunks.append(current_chunk)
 
-    # Apply overlap
+    # Apply overlap (prefix taken from chunks[i-1], not overlapped[-1],
+    # to prevent cascading prefix growth across chunks)
     if overlap > 0 and chunks:
         overlapped = [chunks[0]]
         for i in range(1, len(chunks)):
-            prev = overlapped[-1]
-            prefix = last_words(prev, overlap)
-            combined = (prefix + " " + chunks[i]).strip()
-            overlapped.append(combined)
+            prefix = last_words(chunks[i - 1], overlap)
+            overlapped.append((prefix + " " + chunks[i]).strip())
         return overlapped
 
     return chunks
