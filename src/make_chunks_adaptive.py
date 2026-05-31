@@ -17,17 +17,14 @@ Pipeline
 """
 
 import re
-from typing import List, Set, Tuple, TYPE_CHECKING
+from typing import List, Tuple, TYPE_CHECKING
 
 from make_chunks_structural import (
     _detect_sections,
     _word_count,
     _split_sentences,
 )
-from make_chunks_semantic import (
-    _split_sentences as _semantic_split_sentences,
-    _cosine_sim,
-)
+from make_chunks_semantic import _semantic_subsplit
 
 if TYPE_CHECKING:
     from ai import AI
@@ -270,65 +267,6 @@ def _subsplit_list(text: str, max_words: int, min_words: int) -> List[str]:
     return chunks if chunks else [text.strip()]
 
 
-def _subsplit_narrative(
-    text: str,
-    ai: 'AI',
-    max_words: int,
-    similarity_threshold: float,
-    min_sentences: int,
-    max_sentences: int,
-) -> List[str]:
-    """Semantic chunking: taglia dove la similarità coseno tra frasi scende sotto soglia."""
-    tokens = _semantic_split_sentences(text)
-    if not tokens:
-        return [text.strip()] if text.strip() else []
-
-    real_sentences: List[str] = []
-    para_cuts: Set[int] = set()
-
-    for t in tokens:
-        if t == '':
-            if real_sentences:
-                para_cuts.add(len(real_sentences) - 1)
-        else:
-            real_sentences.append(t)
-
-    if not real_sentences:
-        return [text.strip()] if text.strip() else []
-    if len(real_sentences) == 1:
-        return [real_sentences[0]]
-
-    embeddings = ai.e.embed(real_sentences)
-    sims = [_cosine_sim(embeddings[i], embeddings[i + 1]) for i in range(len(real_sentences) - 1)]
-
-    cut_after = [False] * len(real_sentences)
-    cur_sents = 1
-    cur_words = _word_count(real_sentences[0])
-
-    for i, sim in enumerate(sims):
-        next_words = cur_words + _word_count(real_sentences[i + 1])
-        if (i in para_cuts
-                or (sim < similarity_threshold and cur_sents >= min_sentences)
-                or cur_sents >= max_sentences
-                or (next_words > max_words and cur_sents >= min_sentences)):
-            cut_after[i] = True
-            cur_sents = 1
-            cur_words = _word_count(real_sentences[i + 1])
-        else:
-            cur_sents += 1
-            cur_words = next_words
-
-    chunks: List[str] = []
-    group: List[str] = []
-    for i, sent in enumerate(real_sentences):
-        group.append(sent)
-        if cut_after[i]:
-            chunks.append(' '.join(group))
-            group = []
-    if group:
-        chunks.append(' '.join(group))
-
-    return chunks if chunks else [text.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -421,7 +359,7 @@ def make_chunks_adaptive(
             elif content_type == _LIST_HEAVY:
                 sub = _subsplit_list(typed_text, max_words, min_words)
             else:
-                sub = _subsplit_narrative(
+                sub = _semantic_subsplit(
                     typed_text, ai=ai, max_words=max_words,
                     similarity_threshold=similarity_threshold,
                     min_sentences=min_sentences, max_sentences=max_sentences,
