@@ -1,0 +1,22 @@
+[
+  {
+    "gguf_path": "C:/Users/campa/Desktop/models/nomic-embed-text-v1.f32.gguf",
+    "cache": {
+      "path": "ecache.tmp.pkl",
+      "keep_open": true
+    },
+    "default": true,
+    "embed": true,
+    "name": "nomic-embed-text-v1.f32"
+  },
+  {
+    "model_name": "gemini-2.5-flash",
+    "cache": {
+      "path": "gcache.gemini.tmp.pkl",
+      "keep_open": true
+    },
+    "default": true,
+    "chat_format": "gemini",
+    "name": "gemini-2.5-flash"
+  }
+]

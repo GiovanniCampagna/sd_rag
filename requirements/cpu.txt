@@ -1,0 +1,6 @@
+-r base.txt
+llama_cpp_python==0.3.16
+# MAYBE ALSO INSTALL HUGGINGFACE -----------------
+# pip install torch --index-url https://download.pytorch.org/whl/cpu
+# pip install transformers
+# optimum

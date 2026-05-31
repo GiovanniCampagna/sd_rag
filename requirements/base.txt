@@ -1,0 +1,20 @@
+# FOR FRAMEWORK ----------
+typing_extensions
+google-genai
+numpy
+typeddict-validator
+# rank_bm25
+# rakun2
+# faiss-cpu
+# fuzzysearch
+# ipysigma
+# networkx
+# FOR DATA ANALYSIS ----------
+pandas
+scipy
+matplotlib
+tabulate
+PyQt5
+# scikit-learn
+# FOR DATA PREP SCRIPTS ------
+Wikipedia-API

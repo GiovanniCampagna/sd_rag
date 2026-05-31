@@ -1,0 +1,25 @@
+[
+  {
+    "gguf_path": "~/models/granite-embedding-30m-english-f16.gguf",
+    "cache": {
+      "path": "granite-ecache.tmp.pkl",
+      "keep_open": true
+    },
+    "default": true,
+    "embed": true,
+    "name": "granite"
+  },
+  {
+    "gguf_path": "~/models/qwen2.5-3b-instruct-q4_k_m.gguf",
+    "cache": {
+      "path": "gcache.qwen1-5b.tmp.pkl",
+      "keep_open": true
+    },
+    "default": true,
+    "chat_format": "qwen",
+    "name": "qwen",
+    "n_ctx": 20000,
+    "verbose_tokens": true,
+    "supports_system_prompt": true
+  }
+]

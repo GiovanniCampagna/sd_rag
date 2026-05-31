@@ -1,0 +1,832 @@
+[
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 1,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 1,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 1,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 1,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 1,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 1,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 1,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 2,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 2,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 2,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 2,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 2,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 2,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 2,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 3,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 3,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 3,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 3,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 3,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 3,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 3,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 4,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 4,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 4,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 4,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 4,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 4,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 4,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 5,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 5,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 5,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 5,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 5,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 5,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 5,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 6,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 6,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 6,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 6,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 6,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 6,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 6,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 7,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 7,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 7,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 7,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 7,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 7,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 7,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 8,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 8,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 8,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 8,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 8,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 8,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 8,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 9,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 9,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 9,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 9,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 9,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 9,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 9,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 10,
+        "rerank_constraints": "wavg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 10,
+        "rerank_constraints": "query"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 10,
+        "rerank_constraints": "avg"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 10,
+        "rerank_constraints": "concat"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 10,
+        "rerank_constraints": "max"
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 10,
+        "rerank_constraints": [
+            "query",
+            "avg"
+        ]
+    },
+    {
+        "label": "",
+        "generate": "mute",
+        "bind_limit": 30,
+        "chunk_size_words": 60,
+        "chunk_overlap_words": 0,
+        "constraints_batch_size": 3,
+        "limit_chunks": 3,
+        "limit_constraints": 10,
+        "rerank_constraints": [
+            "query",
+            "concat"
+        ]
+    }
+]

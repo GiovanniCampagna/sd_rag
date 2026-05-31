@@ -1,0 +1,12 @@
+[
+    {
+        "gguf_path": "~/models/nomic-embed-text-v1.f32.gguf",
+        "cache": {
+            "path": "ecache.tmp.pkl",
+            "keep_open": true
+        },
+        "default": true,
+        "embed": true,
+        "name": "nomic-embed-text-v1.f32"
+    }
+]

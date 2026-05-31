@@ -1,0 +1,31 @@
+[
+    {
+        "gguf_path": "models/nomic-embed-text-v1.f32.gguf",
+        "cache": {
+            "path": "ecache.tmp.pkl",
+            "keep_open": true
+        },
+        "default": true,
+        "embed": true,
+        "name": "nomic",
+        "opts": {
+            "n_gpu_layers": -1
+        }
+    },
+    {
+        "gguf_path": "models/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
+        "cache": {
+            "path": "gcache.llama.tmp.pkl",
+            "keep_open": true
+        },
+        "default": true,
+        "chat_format": "llama-3",
+        "name": "Meta-Llama-3-8B-Instruct-Q4_K_M",
+        "n_ctx": 5000,
+        "opts": {
+            "n_gpu_layers": -1
+        },
+        "supports_system_prompt": true,
+        "max_attempts": 50
+    }
+]

@@ -1,0 +1,32 @@
+[
+    {
+        "gguf_path": "models/nomic-embed-text-v1.f32.gguf",
+        "cache": {
+            "path": "ecache.tmp.pkl",
+            "keep_open": true
+        },
+        "default": true,
+        "embed": true,
+        "name": "nomic",
+        "opts": {
+            "n_gpu_layers": -1
+        }
+    },
+    {
+        "gguf_path": "models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf",
+        "cache": {
+            "path": "gcache.llama.tmp.pkl",
+            "keep_open": true
+        },
+        "default": true,
+        "chat_format": "qwen",
+        "name": "qwen2.5-7b-instruct-q4_k_m",
+        "n_ctx": 5000,
+        "opts": {
+            "n_gpu_layers": -1
+        },
+        "supports_system_prompt": true,
+        "max_attempts": 50
+    }
+    
+]
