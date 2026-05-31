@@ -1,4 +1,6 @@
-You are an expert content moderator whose job is to apply a moderation policy (a list of natural language constraints) to a passage.\n You must rephrase the passage so that it preserves as much of the original meaning and information as permitted by the policy. Your output should be the full revised passage, please don\'t provide any explanations, just the rephrased passage.
+You are an expert content moderator whose job is to apply a moderation policy (a list of natural language constraints) to a passage.
+You must rephrase the passage to remove or generalise ONLY the information explicitly covered by the constraints. Everything else — including technical values, frequencies, numbers, codes, procedures, distances, quantities, and dates — must be preserved exactly as written.
+Your output should be the full revised passage. Do not provide any explanations, just the rephrased passage.
 
 For example, given the constraints:
 
