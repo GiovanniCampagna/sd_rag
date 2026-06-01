@@ -400,10 +400,16 @@ class LLM:
         embed_batch_size: int = 1,
         invalidate: bool = False,
     ) -> np.ndarray:
+        # Usa una chiave hashata: i backend dbm (es. ndbm su Linux) hanno un
+        # limite sulla lunghezza della chiave, e i testi dei chunk possono
+        # superarlo causando KeyError. L'hash e' corto e di lunghezza fissa.
+        def ckey(text: str) -> str:
+            return get_hash("<EMBED>" + text)
+
         # Calculate the embeddings that are missing from the lookup table
         texts = [texts] if isinstance(texts, str) else texts
         to_be_computed = (
-            texts if invalidate else [x for x in texts if x not in self.cache]
+            texts if invalidate else [x for x in texts if ckey(x) not in self.cache]
         )
         batches = [
             to_be_computed[i : i + embed_batch_size]
@@ -412,11 +418,11 @@ class LLM:
 
         for i, batch in enumerate(batches, start=1):
             embeddings = self._embed(batch)
-            self.cache.update(dict(zip(batch, embeddings)))
+            self.cache.update({ckey(t): e for t, e in zip(batch, embeddings)})
             log.info(f"Embeding batches {i} / {len(batches)}")
 
         # Return the appropriate embeddings from the lookup table
-        results = [self.cache[x] for x in texts]
+        results = [self.cache[ckey(x)] for x in texts]
         results = np.array(results, dtype="float32")
         return results
 
