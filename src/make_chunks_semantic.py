@@ -48,6 +48,23 @@ def _semantic_subsplit(
     Does NOT add overlap — the caller handles that.
     Used by make_chunks_semantic, make_chunks_structural_semantic, and make_chunks_adaptive.
     """
+    def _cap(chs: List[str]) -> List[str]:
+        # Spezza i chunk oltre max_words quando il sentence splitter non riesce
+        # a dividere (es. frasi lunghissime per numeri/abbreviazioni come '3.3.5',
+        # 'par. 4.2'). Protegge structural_semantic e adaptive, che chiamano questa
+        # funzione direttamente (make_chunks_semantic ha gia' un cap esterno).
+        if max_words <= 0:
+            return chs
+        out: List[str] = []
+        for c in chs:
+            w = c.split()
+            if len(w) <= max_words:
+                out.append(c)
+            else:
+                for s in range(0, len(w), max_words):
+                    out.append(' '.join(w[s:s + max_words]))
+        return out
+
     tokens = _split_sentences(text)
     if not tokens:
         return [text.strip()] if text.strip() else []
@@ -65,7 +82,7 @@ def _semantic_subsplit(
     if not sentences:
         return [text.strip()] if text.strip() else []
     if len(sentences) == 1:
-        return [sentences[0]]
+        return _cap([sentences[0]])
 
     embeddings = ai.e.embed(sentences)
     sims = [_cosine_sim(embeddings[i], embeddings[i + 1]) for i in range(len(sentences) - 1)]
@@ -97,7 +114,7 @@ def _semantic_subsplit(
     if group:
         chunks.append(' '.join(group))
 
-    return chunks if chunks else [text.strip()]
+    return _cap(chunks if chunks else [text.strip()])
 
 
 def make_chunks_semantic(
