@@ -53,6 +53,26 @@ For more config format examples, please refer to the [configs/](configs/) folder
 
 Most of the code is in the [src/](src/) folder.
 
+## Corpus extraction (reproducibility)
+
+The professional corpus (`datasets/corpus_prof.json`) is regenerated from the
+source PDF with the structured extraction pipeline (table-aware, section-aware,
+self-cleaning):
+
+```sh
+python scripts/extract_pdf.py <path/to/document.pdf> datasets/corpus_prof.json
+```
+
+A naive baseline extraction (raw text dump, one corpus entry, no cleaning) is
+kept for comparison:
+
+```sh
+python scripts/extract_pdf_base.py <path/to/document.pdf> datasets/corpus_prof_raw.json
+```
+
+Both scripts read and write UTF-8 explicitly, so accented Italian characters
+are preserved regardless of the platform default code page.
+
 ## Other scripts
 
 You can find other helper scripts in the [scripts/](scripts/) folder:

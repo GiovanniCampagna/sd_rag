@@ -9,6 +9,10 @@
     "min_sentences": 1,
     "max_sentences": 8,
     "overlap_sentences": 1,
+    "tabular_max_rows": 1,
+    "inject_section_heading": true,
+    "heading_like_max_words": 10,
+    "indented_list_density": 0.70,
     "constraints_batch_size": 3,
     "limit_chunks": 3,
     "limit_constraints": 3,
@@ -16,9 +20,7 @@
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "extract",
-    "inject": false,
-    "tabular_max_rows": 1,
-    "inject_section_heading": true
+    "inject": false
   },
   {
     "label": "adaptive",
@@ -30,6 +32,10 @@
     "min_sentences": 1,
     "max_sentences": 8,
     "overlap_sentences": 1,
+    "tabular_max_rows": 1,
+    "inject_section_heading": true,
+    "heading_like_max_words": 10,
+    "indented_list_density": 0.70,
     "constraints_batch_size": 3,
     "limit_chunks": 3,
     "limit_constraints": 3,
@@ -37,9 +43,7 @@
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "extract",
-    "inject": true,
-    "tabular_max_rows": 1,
-    "inject_section_heading": true
+    "inject": true
   },
   {
     "label": "adaptive",
@@ -51,6 +55,10 @@
     "min_sentences": 1,
     "max_sentences": 8,
     "overlap_sentences": 1,
+    "tabular_max_rows": 1,
+    "inject_section_heading": true,
+    "heading_like_max_words": 10,
+    "indented_list_density": 0.70,
     "constraints_batch_size": 3,
     "limit_chunks": 3,
     "limit_constraints": 3,
@@ -58,9 +66,7 @@
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "monolith",
-    "inject": false,
-    "tabular_max_rows": 1,
-    "inject_section_heading": true
+    "inject": false
   },
   {
     "label": "adaptive",
@@ -72,6 +78,10 @@
     "min_sentences": 1,
     "max_sentences": 8,
     "overlap_sentences": 1,
+    "tabular_max_rows": 1,
+    "inject_section_heading": true,
+    "heading_like_max_words": 10,
+    "indented_list_density": 0.70,
     "constraints_batch_size": 3,
     "limit_chunks": 3,
     "limit_constraints": 3,
@@ -79,9 +89,7 @@
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "monolith",
-    "inject": true,
-    "tabular_max_rows": 1,
-    "inject_section_heading": true
+    "inject": true
   },
   {
     "label": "adaptive",
@@ -93,6 +101,10 @@
     "min_sentences": 1,
     "max_sentences": 8,
     "overlap_sentences": 1,
+    "tabular_max_rows": 1,
+    "inject_section_heading": true,
+    "heading_like_max_words": 10,
+    "indented_list_density": 0.70,
     "constraints_batch_size": 3,
     "limit_chunks": 3,
     "limit_constraints": 3,
@@ -100,9 +112,7 @@
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "rephrase",
-    "inject": false,
-    "tabular_max_rows": 1,
-    "inject_section_heading": true
+    "inject": false
   },
   {
     "label": "adaptive",
@@ -114,6 +124,10 @@
     "min_sentences": 1,
     "max_sentences": 8,
     "overlap_sentences": 1,
+    "tabular_max_rows": 1,
+    "inject_section_heading": true,
+    "heading_like_max_words": 10,
+    "indented_list_density": 0.70,
     "constraints_batch_size": 3,
     "limit_chunks": 3,
     "limit_constraints": 3,
@@ -121,8 +135,6 @@
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "rephrase",
-    "inject": true,
-    "tabular_max_rows": 1,
-    "inject_section_heading": true
+    "inject": true
   }
 ]

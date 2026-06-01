@@ -100,6 +100,8 @@ def build_index(
                 overlap_sentences=config.get('overlap_sentences', 1),
                 tabular_max_rows=config.get('tabular_max_rows', 0),
                 inject_section_heading=config.get('inject_section_heading', True),
+                heading_like_max_words=config.get('heading_like_max_words', 10),
+                indented_list_density=config.get('indented_list_density', 0.70),
             )
             log.info(
                 f'Adaptive chunking: {len(chunk_texts)} chunks '

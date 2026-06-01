@@ -54,14 +54,14 @@ _NARRATIVE  = 'NARRATIVE'
 # Classificazione riga / blocco
 # ---------------------------------------------------------------------------
 
-def _classify_line(line: str) -> str:
+def _classify_line(line: str, heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS) -> str:
     """Classifica una riga non vuota come TABULAR, LIST_HEAVY o NARRATIVE."""
     if ' | ' in line:
         return _TABULAR
     # Intestazione numerata breve (es. "3.2 Prescrizioni…"): no celle → NARRATIVE
     if (_TABULAR_ROW_RE.match(line)
             and not _MULTI_COLUMN_2_RE.search(line)
-            and len(line.split()) <= _HEADING_LIKE_MAX_WORDS):
+            and len(line.split()) <= heading_like_max_words):
         return _NARRATIVE
     if _TABULAR_ROW_RE.match(line) or _MULTI_COLUMN_RE.search(line):
         return _TABULAR
@@ -70,13 +70,13 @@ def _classify_line(line: str) -> str:
     return _NARRATIVE
 
 
-def _is_dense_indented_block(lines: List[str]) -> bool:
-    """True se ≥70% delle righe non vuote iniziano con 1-4 spazi (es. RIFERIMENTI)."""
+def _is_dense_indented_block(lines: List[str], density: float = _INDENTED_LIST_DENSITY) -> bool:
+    """True se almeno `density` delle righe non vuote iniziano con 1-4 spazi (es. RIFERIMENTI)."""
     non_empty = [l for l in lines if l.strip()]
     if len(non_empty) < 3:
         return False
     indented = sum(1 for l in non_empty if _INDENTED_ITEM_RE.match(l))
-    return indented / len(non_empty) >= _INDENTED_LIST_DENSITY
+    return indented / len(non_empty) >= density
 
 
 def _looks_like_table_header(row: str) -> bool:
@@ -87,11 +87,15 @@ def _looks_like_table_header(row: str) -> bool:
     return len(cells) >= 2 and all(len(c.split()) <= 5 for c in cells)
 
 
-def _split_into_typed_blocks(text: str) -> List[Tuple[str, str]]:
+def _split_into_typed_blocks(
+    text: str,
+    heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS,
+    indented_list_density: float = _INDENTED_LIST_DENSITY,
+) -> List[Tuple[str, str]]:
     """
     Raggruppa righe consecutive dello stesso tipo in sotto-blocchi.
     Righe vuote assorbite nel blocco corrente.
-    Blocchi NARRATIVE con densità rientrata ≥70% riclassificati LIST_HEAVY.
+    Blocchi NARRATIVE con densità rientrata >= indented_list_density riclassificati LIST_HEAVY.
     """
     lines = text.split('\n')
     blocks: List[Tuple[str, str]] = []
@@ -104,7 +108,7 @@ def _split_into_typed_blocks(text: str) -> List[Tuple[str, str]]:
             if current_lines:
                 current_lines.append(line)
             continue
-        line_type = _classify_line(stripped)
+        line_type = _classify_line(stripped, heading_like_max_words)
         if line_type != current_type:
             if current_lines:
                 block_text = '\n'.join(current_lines).strip()
@@ -122,7 +126,7 @@ def _split_into_typed_blocks(text: str) -> List[Tuple[str, str]]:
 
     # Riclassifica blocchi NARRATIVE che sono liste rientrate senza marker
     processed = [
-        (_LIST_HEAVY if btype == _NARRATIVE and _is_dense_indented_block(btext.split('\n')) else btype, btext)
+        (_LIST_HEAVY if btype == _NARRATIVE and _is_dense_indented_block(btext.split('\n'), indented_list_density) else btype, btext)
         for btype, btext in blocks
     ]
     return processed if processed else [(_NARRATIVE, text.strip())]
@@ -286,6 +290,8 @@ def make_chunks_adaptive(
     max_sentences: int = 8,
     tabular_max_rows: int = 0,
     inject_section_heading: bool = True,
+    heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS,
+    indented_list_density: float = _INDENTED_LIST_DENSITY,
 ) -> List[str]:
     """
     Chunking adattivo su documenti procedurali misti (tabelle, liste, prosa).
@@ -303,6 +309,10 @@ def make_chunks_adaptive(
     tabular_max_rows      : righe massime per chunk TABULAR; 0 = solo limite parole (default 0)
     inject_section_heading: se True, prefissa ogni chunk con il titolo della sezione
                             di appartenenza per ancorare il retrieval (default True)
+    heading_like_max_words: righe numerate con <= N parole sono trattate come
+                            intestazioni (NARRATIVE) e non come righe tabellari (default 10)
+    indented_list_density : frazione di righe rientrate oltre la quale un blocco
+                            NARRATIVE viene riclassificato come LIST_HEAVY (default 0.70)
     """
     if not text or not text.strip():
         return []
@@ -346,11 +356,11 @@ def make_chunks_adaptive(
 
     for section_id, section_heading, block in section_blocks:
         if _word_count(block) <= max_words:
-            first_type = _split_into_typed_blocks(block)[0][0]
+            first_type = _split_into_typed_blocks(block, heading_like_max_words, indented_list_density)[0][0]
             raw_chunks.append((section_id, first_type, block))
             continue
 
-        for content_type, typed_text in _split_into_typed_blocks(block):
+        for content_type, typed_text in _split_into_typed_blocks(block, heading_like_max_words, indented_list_density):
             if _word_count(typed_text) <= max_words:
                 raw_chunks.append((section_id, content_type, typed_text))
                 continue

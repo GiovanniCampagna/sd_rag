@@ -96,6 +96,10 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
         tabular_max_rows      — max table rows per TABULAR chunk; 0 = word-limit only (default 0).
                                 Set to 1 to give each procedural step its own focused chunk.
         inject_section_heading — if True, each chunk is prefixed with its section heading (default True).
+        heading_like_max_words — numbered lines with <= N words are treated as headings
+                                 (NARRATIVE) rather than table rows (default 10).
+        indented_list_density  — fraction of indented lines above which a NARRATIVE block
+                                 is reclassified as LIST_HEAVY (default 0.70).
 
       Graph-RAG readiness: the metadata tags on each chunk allow the next
       iteration to build a knowledge graph of Section→Chunk→Actor edges
@@ -121,6 +125,8 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     # adaptive-only params (used when chunk_method = "adaptive")
     tabular_max_rows: int        # max table rows per chunk; 0 = word-limit only (default 0)
     inject_section_heading: bool # prepend section heading to every chunk (default True)
+    heading_like_max_words: int  # numbered lines with <= N words = heading, not table (default 10)
+    indented_list_density: float # indented-line fraction to reclassify NARRATIVE→LIST (default 0.70)
  
 class SDRAGIndex(TypedDict):
     docs: Dict[str, DocNode]
