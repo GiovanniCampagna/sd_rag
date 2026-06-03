@@ -95,8 +95,25 @@ def redact_extract(
     # Replace every sensitive phrase span
     for phrase in phrases:
 
+        # Salta frasi vuote o troppo corte: get_best_match richiede qlen>0 e
+        # un match cortissimo/spazzatura farebbe esplodere il replace.
+        if not phrase or len(phrase.strip()) < 4:
+            continue
+
         # LLM-quoted strings aren't perfect, find the best match
-        _, _, _, best_match = get_best_match(phrase, context)
+        _, _, ratio, best_match = get_best_match(phrase, context)
+
+        # Difese contro replace degeneri (causavano context esplosi con modelli
+        # locali che restituiscono frasi imprecise):
+        #  - best_match vuoto o troppo corto -> replace si auto-amplifica
+        #  - match di bassa qualita' -> non affidabile, meglio non redigere
+        #  - best_match che contiene gia' il placeholder -> ri-sostituzione a valanga
+        if (not best_match
+                or len(best_match) < 4
+                or ratio < 0.6
+                or placeholder in best_match):
+            continue
+
         # Replace all instances of the best match
         context = context.replace(best_match, placeholder)
 
