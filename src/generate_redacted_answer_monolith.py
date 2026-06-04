@@ -27,9 +27,10 @@ def generate_redacted_answer_monolith(
             {
                 "role": "user",
                 "content": (
-                    "Answer the question to the best of your ability using " + 
+                    "Answer the question to the best of your ability using " +
                     "a single sentence and without violating the provided " +
-                    "constraint(s). If no answer is possible, answer " +
+                    "constraint(s). Answer in the same language as the question. " +
+                    "If no answer is possible, answer " +
                     "“I am unable to answer this question.” instead.\n" +
                     f"Question: {query}\n\n"
                 )
@@ -39,12 +40,13 @@ def generate_redacted_answer_monolith(
     else:
 
         prompt = (
-            f'Answer a question using the following story:\n\n{context}\n\n' + 
+            f'Answer a question using the following story:\n\n{context}\n\n' +
             'The answer must obey the following constraint(s):\n' +
             '\n'.join(['- ' + c for c in constraints]) + '\n\n' +
-            "Answer the question to the best of your ability using " + 
+            "Answer the question to the best of your ability using " +
             "a single sentence and without violating the provided " +
-            "constraint(s). If no answer is possible, answer " +
+            "constraint(s). Answer in the same language as the question. " +
+            "If no answer is possible, answer " +
             "“I am unable to answer this question.” instead.\n" +
             f"Question: {query}\n\n"
         )
