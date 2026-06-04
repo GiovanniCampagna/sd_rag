@@ -15,7 +15,7 @@
     {
         "gguf_path": "models/qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf",
         "cache": {
-            "path": "gcache.llama.tmp.pkl",
+            "path": "gcache.qwen.tmp.pkl",
             "keep_open": true
         },
         "default": true,
