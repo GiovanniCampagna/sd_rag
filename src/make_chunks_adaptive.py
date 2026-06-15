@@ -81,14 +81,6 @@ def _is_dense_indented_block(lines: List[str], density: float = _INDENTED_LIST_D
     return indented / len(non_empty) >= density
 
 
-def _looks_like_table_header(row: str) -> bool:
-    """True se la riga è un'intestazione pipe con celle brevi (≤5 parole ciascuna)."""
-    if ' | ' not in row:
-        return False
-    cells = [c.strip() for c in row.split(' | ')]
-    return len(cells) >= 2 and all(len(c.split()) <= 5 for c in cells)
-
-
 def _split_into_typed_blocks(
     text: str,
     heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS,
@@ -178,35 +170,28 @@ def _split_last_cell(last_cell: str, combined_prefix: str, max_words: int) -> Li
 def _subsplit_tabular(text: str, max_words: int, min_words: int, max_rows: int = 0) -> List[str]:
     """
     Raggruppa righe consecutive in chunk di al piu' max_rows righe (se max_rows>0)
-    e comunque <= max_words parole (scatta il primo dei due limiti), header (se
-    presente) ripetuto in testa a ogni gruppo. Una tabella che entra in un solo
-    gruppo resta intera. Righe pipe-separate oversize sono spezzate nell'ultima cella.
+    e comunque <= max_words parole (scatta il primo dei due limiti). Una tabella che
+    entra in un solo gruppo resta intera. L'eventuale riga di intestazione resta come
+    prima riga del primo chunk e NON viene ripetuta nei successivi (ripeterla in ogni
+    chunk diluirebbe solo gli embedding). Righe pipe-separate oversize sono spezzate
+    nell'ultima cella.
     """
     lines = [l for l in text.split('\n') if l.strip()]
     if not lines:
         return [text.strip()] if text.strip() else []
 
-    header = ''
-    if _looks_like_table_header(lines[0]):
-        header = lines[0]
-        lines = lines[1:]
-        if not lines:
-            return [header]
-
     def _emit(line_group: List[str]) -> str:
-        block = '\n'.join(line_group)
-        return (header + '\n' + block).strip() if header else block
+        return '\n'.join(line_group)
 
     def _split_pipe_row(line: str) -> List[str]:
         if ' | ' not in line:
-            return [((header + '\n' + line).strip() if header else line)]
+            return [line]
         parts = line.split(' | ')
         row_prefix = ' | '.join(parts[:-1]) + ' | '
-        combined = (header + '\n' + row_prefix).strip('\n') if header else row_prefix
-        if _word_count(combined) + _word_count(parts[-1]) <= max_words:
-            return [((header + '\n' + line).strip('\n') if header else line)]
-        result = _split_last_cell(parts[-1], combined + ' ', max_words)
-        return result if result else [((header + '\n' + line).strip('\n') if header else line)]
+        if _word_count(row_prefix) + _word_count(parts[-1]) <= max_words:
+            return [line]
+        result = _split_last_cell(parts[-1], row_prefix + ' ', max_words)
+        return result if result else [line]
 
     chunks: List[str] = []
     current_lines: List[str] = []
