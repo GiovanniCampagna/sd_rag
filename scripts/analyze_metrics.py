@@ -59,46 +59,8 @@ def compare_priv_complet_score(df: pd.DataFrame):
 def compare_priv_score(df: pd.DataFrame):
 
     return df.groupby(['generate', 'inject'])[[
-        'privacy_score',
+        'privacy_score', 
     ]].mean()
-
-def compare_chunking_token_efficiency(df: pd.DataFrame):
-
-    # Efficienza informativa per metodo di chunking: a parita' di completeness,
-    # vince chi usa meno token di contesto ("minimo contesto, miglior completezza").
-    # original_context_tokens isola il costo del chunking dalla redazione privacy.
-
-    if 'original_context_tokens' not in df.columns:
-        raise SystemExit(
-            "Colonna 'original_context_tokens' assente: rilancia la pipeline "
-            "(modalita' run) per produrre i conteggi token."
-        )
-
-    # Raggruppa per metodo di chunking. Usa 'label' se presente, altrimenti
-    # ripiega su chunk_method / chunk_size_words.
-    group_keys = [k for k in ['label', 'chunk_method'] if k in df.columns] or ['generate']
-
-    if 'completeness_score_judge_llm' in df.columns:
-        df['completeness_score_judge_llm'] = df['completeness_score_judge_llm'].map(
-            lambda x: x if isinstance(x, float) else 0
-        )
-
-    value_cols = [c for c in [
-        'original_context_tokens',
-        'answer_context_tokens',
-        'completeness_score',
-        'completeness_score_judge_llm',
-    ] if c in df.columns]
-
-    table = df.groupby(group_keys)[value_cols].mean()
-
-    # Efficienza: punti di completeness per 1000 token di contesto.
-    if 'completeness_score' in table.columns:
-        table['completeness_per_1k_tokens'] = (
-            table['completeness_score'] / table['original_context_tokens'] * 1000
-        )
-
-    return table.sort_values('original_context_tokens')
 
 
 if __name__ == '__main__':
@@ -127,7 +89,6 @@ if __name__ == '__main__':
         'asr': compare_asr_interrogation,
         'privcomp': compare_priv_complet_score,
         'priv': compare_priv_score,
-        'tokeff': compare_chunking_token_efficiency,
     }
 
     for metric in args.metrics:

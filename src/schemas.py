@@ -170,14 +170,6 @@ class Answer(QueryConfig, PromptLeakConfig):
     model_names: List[str]
     original_context: str
     redacted_context: str
-    # Token del contesto recuperato (pre-redazione): isola il costo del metodo
-    # di chunking, indipendente dalla modalita' privacy. Metrica per il
-    # confronto di efficienza token/completeness tra strategie di chunking.
-    original_context_tokens: int
-    # Token del contesto realmente passato al generatore finale (contesto
-    # redatto per extract/rephrase, contesto originale per plain/monolith,
-    # 0 per mute).
-    answer_context_tokens: int
  
 class TestConfig(BuildSDRAGIndexConfig, QueryConfig, PromptLeakConfig):
  
