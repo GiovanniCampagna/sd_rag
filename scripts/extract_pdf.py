@@ -17,7 +17,7 @@ Pipeline
 
 2. Pulizia     — su ogni pagina di contenuto:
    a) righe ricorrenti >= 50% delle pagine → solo prima occorrenza
-   b) intestazioni tabellari ripetute (righe con '|') → solo prima
+   b) intestazioni tabellari ripetute (righe con '|') → rimosse del tutto (prima di (a))
    c) numeri isolati 1-3 cifre → rimossi, salvo se su riga con titolo
       maiuscolo (sarebbero numeri di sezione, non di pagina)
    d) didascalie Figura/Tabella X → rimosse
@@ -237,7 +237,6 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
     UNICODE_JUNK_RE = re.compile(r'[\uf000-\uf8ff]')
 
     seen_recurring: set[str] = set()
-    seen_headers:   set[str] = set()
     cleaned: list[str] = []
 
     for page in pages_text:
@@ -258,17 +257,17 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
                             if lines[j].strip()), '')
                 if not ALLCAPS_RE.match(nxt):
                     continue
-            # a) Righe ricorrenti
+            # b) Header tabellari ripetuti → rimossi del tutto (anche la prima
+            #    occorrenza). Va PRIMA di (a): un header che ricorre in >=50%
+            #    delle pagine sarebbe altrimenti intercettato da 'ricorrenti' e
+            #    tenuto alla prima copia. Le righe-dato non sono ripetute → salve.
+            if s in repeated_headers:
+                continue
+            # a) Righe ricorrenti non tabellari (header/footer di pagina) → tieni la prima
             if s in recurring:
                 if s not in seen_recurring:
                     page_out.append(line)
                     seen_recurring.add(s)
-                continue
-            # b) Header tabellari ripetuti
-            if s in repeated_headers:
-                if s not in seen_headers:
-                    page_out.append(line)
-                    seen_headers.add(s)
                 continue
             page_out.append(line)
 

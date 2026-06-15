@@ -10,8 +10,8 @@ Pipeline
    consecutive dello stesso tipo in sotto-blocchi omogenei.
 3. Sub-splitting adattivo per tipo:
    - TABULAR    → gruppi di tabular_max_rows righe entro tabular_max_words parole
-                  (header ripetuto per gruppo, mai una riga spezzata); celle lunghe
-                  divise per frase.
+                  (mai una riga spezzata); celle lunghe divise per frase. Nessuna
+                  logica di header: le righe passano come sono dall'input.
    - LIST_HEAVY → voce per voce (marker espliciti o blocchi rientrati ~70%).
    - NARRATIVE  → semantic chunking (coseno tra frasi consecutive).
 4. Merge chunk sotto min_words (stesso tipo/sezione). Nessun overlap: i confini
