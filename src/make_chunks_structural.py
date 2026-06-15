@@ -142,7 +142,6 @@ def _split_by_sentences(text: str, max_words: int) -> List[str]:
 def make_chunks_structural(
     text: str,
     max_words: int = 200,
-    overlap_sentences: int = 1,
     min_words: int = 20,
 ) -> List[str]:
     """
@@ -151,7 +150,9 @@ def make_chunks_structural(
     1. Detect section headings → slice into section blocks.
     2. Sub-split oversized blocks by paragraph, then sentence.
     3. Merge chunks shorter than min_words into the previous one.
-    4. Add sentence-level overlap between consecutive chunks.
+
+    No sentence overlap: structural boundaries are clean, so an overlap prefix
+    would only blur chunk embeddings and hurt retrieval.
     """
     if not text or not text.strip():
         return []
@@ -190,19 +191,6 @@ def make_chunks_structural(
     if not merged:
         return []
 
-    # Sentence-level overlap (prefix taken from merged[i-1], not overlapped[-1],
-    # to prevent cascading prefix growth)
-    if overlap_sentences > 0 and len(merged) > 1:
-        max_overlap_words = max(10, max_words // 4)
-        overlapped = [merged[0]]
-        for i in range(1, len(merged)):
-            sents = _split_sentences(merged[i - 1])
-            n = min(overlap_sentences, len(sents))
-            prefix_words = ' '.join(sents[-n:]).split() if n else []
-            if len(prefix_words) > max_overlap_words:
-                prefix_words = prefix_words[-max_overlap_words:]
-            prefix = ' '.join(prefix_words)
-            overlapped.append((prefix + ' ' + merged[i]).strip() if prefix else merged[i])
-        return overlapped
-
+    # Nessun overlap: i confini strutturali sono netti, l'overlap sporcherebbe
+    # solo l'embedding del chunk successivo.
     return merged

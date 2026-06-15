@@ -47,26 +47,22 @@ def build_index(
                 max_words=config.get('max_words', 300),
                 min_sentences=config.get('min_sentences', 1),
                 max_sentences=config.get('max_sentences', 8),
-                overlap_sentences=config.get('overlap_sentences', 1),
             )
             log.info(
                 f'Semantic chunking: {len(chunk_texts)} chunks '
                 f'(threshold={config.get("similarity_threshold", 0.45)}, '
                 f'max_words={config.get("max_words", 300)}), '
-                f'max_sentences={config.get("max_sentences", 8)}, '
-                f'overlap={config.get("overlap_sentences", 1)}, '
+                f'max_sentences={config.get("max_sentences", 8)})'
             )
         elif chunk_method == 'structural':
             chunk_texts = make_chunks_structural(
                 doc_text,
                 max_words=config.get('structural_max_words', 200),
-                overlap_sentences=config.get('overlap_sentences', 1),
                 min_words=config.get('structural_min_words', 20),
             )
             log.info(
                 f'Structural chunking: {len(chunk_texts)} chunks '
                 f'(max_words={config.get("structural_max_words", 200)}, '
-                f'overlap_sentences={config.get("overlap_sentences", 1)}, '
                 f'min_words={config.get("structural_min_words", 20)})'
             )
         elif chunk_method == 'structural_semantic':
@@ -78,15 +74,13 @@ def build_index(
                 similarity_threshold=config.get('similarity_threshold', 0.45),
                 min_sentences=config.get('min_sentences', 1),
                 max_sentences=config.get('max_sentences', 8),
-                overlap_sentences=config.get('overlap_sentences', 1),
             )
             log.info(
                 f'Structural-semantic chunking: {len(chunk_texts)} chunks '
                 f'(max_words={config.get("structural_max_words", 200)}, '
                 f'min_words={config.get("structural_min_words", 20)}, '
                 f'threshold={config.get("similarity_threshold", 0.45)}, '
-                f'max_sentences={config.get("max_sentences", 8)}, '
-                f'overlap={config.get("overlap_sentences", 1)})'
+                f'max_sentences={config.get("max_sentences", 8)})'
             )
         elif chunk_method == 'adaptive':
             chunk_texts = make_chunks_adaptive(
@@ -97,8 +91,8 @@ def build_index(
                 similarity_threshold=config.get('similarity_threshold', 0.45),
                 min_sentences=config.get('min_sentences', 1),
                 max_sentences=config.get('max_sentences', 8),
-                overlap_sentences=config.get('overlap_sentences', 1),
-                tabular_max_rows=config.get('tabular_max_rows', 0),
+                tabular_max_rows=config.get('tabular_max_rows', 3),
+                tabular_max_words=config.get('tabular_max_words', 200),
                 inject_section_heading=config.get('inject_section_heading', True),
                 heading_like_max_words=config.get('heading_like_max_words', 10),
                 indented_list_density=config.get('indented_list_density', 0.70),
@@ -109,8 +103,8 @@ def build_index(
                 f'min_words={config.get("structural_min_words", 20)}, '
                 f'threshold={config.get("similarity_threshold", 0.45)}, '
                 f'max_sentences={config.get("max_sentences", 8)}, '
-                f'overlap={config.get("overlap_sentences", 1)}, '
-                f'tabular_max_rows={config.get("tabular_max_rows", 0)}, '
+                f'tabular_max_rows={config.get("tabular_max_rows", 3)}, '
+                f'tabular_max_words={config.get("tabular_max_words", 200)}, '
                 f'inject_heading={config.get("inject_section_heading", True)})'
             )
         else:

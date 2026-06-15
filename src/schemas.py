@@ -92,9 +92,16 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
         max_sentences        — hard sentence cap per narrative chunk (default 8).
         overlap_sentences    — sentences of overlap for narrative chunks only (default 1).
 
+      Adaptive note: adaptive does NOT apply sentence overlap (overlap_sentences is
+      ignored): its boundaries are already clean (table row / list item / semantic cut),
+      so overlap would only blur chunk embeddings and hurt retrieval.
+
       Adaptive-only parameters:
-        tabular_max_rows      — max table rows per TABULAR chunk; 0 = word-limit only (default 0).
-                                Set to 1 to give each procedural step its own focused chunk.
+        tabular_max_rows      — max table rows per TABULAR chunk (0 = word-limit only).
+                                Groups a few coherent steps per chunk: focused enough for
+                                specific values, not fragmented to a single row (default 3).
+        tabular_max_words     — word safety cap for a TABULAR chunk, applied together with
+                                tabular_max_rows (whichever is hit first, default 200).
         inject_section_heading — if True, each chunk is prefixed with its section heading (default True).
         heading_like_max_words — numbered lines with <= N words are treated as headings
                                  (NARRATIVE) rather than table rows (default 10).
@@ -123,7 +130,8 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     # overlap_sentences is shared with semantic (sentences of overlap, default 1)
 
     # adaptive-only params (used when chunk_method = "adaptive")
-    tabular_max_rows: int        # max table rows per chunk; 0 = word-limit only (default 0)
+    tabular_max_rows: int        # max table rows per TABULAR chunk; 0 = word-limit only (default 3)
+    tabular_max_words: int       # word safety cap for a TABULAR chunk, applied alongside tabular_max_rows (default 200)
     inject_section_heading: bool # prepend section heading to every chunk (default True)
     heading_like_max_words: int  # numbered lines with <= N words = heading, not table (default 10)
     indented_list_density: float # indented-line fraction to reclassify NARRATIVE→LIST (default 0.70)

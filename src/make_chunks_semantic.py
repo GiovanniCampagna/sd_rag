@@ -123,7 +123,6 @@ def make_chunks_semantic(
     similarity_threshold: float = 0.45,
     min_sentences: int = 1,
     max_sentences: int = 8,
-    overlap_sentences: int = 1,
     max_words: int = 300,
 ) -> List[str]:
     """
@@ -135,7 +134,6 @@ def make_chunks_semantic(
     similarity_threshold : cosine similarity below which a boundary is inserted (default 0.45)
     min_sentences        : minimum sentences per chunk before a cut is allowed (default 1)
     max_sentences        : force a cut after this many sentences (default 8)
-    overlap_sentences    : sentences from chunk N prepended to chunk N+1 (default 1)
     max_words            : hard word-count cap; 0 to disable (default 300)
     """
     if not text or not text.strip():
@@ -143,15 +141,9 @@ def make_chunks_semantic(
 
     chunks = _semantic_subsplit(text, ai, max_words, similarity_threshold, min_sentences, max_sentences)
 
-    # Sentence-level overlap (prefix taken from chunks[i-1], not overlapped[-1])
-    if overlap_sentences > 0 and len(chunks) > 1:
-        overlapped = [chunks[0]]
-        for i in range(1, len(chunks)):
-            prev_sents = [s for s in _split_sentences_base(chunks[i - 1]) if s]
-            n = min(overlap_sentences, len(prev_sents))
-            prefix = ' '.join(prev_sents[-n:]) if n else ''
-            overlapped.append((prefix + ' ' + chunks[i]).strip() if prefix else chunks[i])
-        chunks = overlapped
+    # Nessun overlap: se due chunk sono separati e' per un calo di similarita'
+    # (cambio di argomento); ri-incollare la frase precedente sporcherebbe solo
+    # l'embedding del nuovo chunk e peggiorerebbe il retrieval.
 
     # Hard word-count cap (fallback for text the sentence splitter can't break)
     if max_words > 0:

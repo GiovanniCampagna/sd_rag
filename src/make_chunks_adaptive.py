@@ -9,11 +9,13 @@ Pipeline
 2. _split_into_typed_blocks  → scansione riga per riga; raggruppa righe
    consecutive dello stesso tipo in sotto-blocchi omogenei.
 3. Sub-splitting adattivo per tipo:
-   - TABULAR    → riga per riga; header ripetuto in ogni chunk; celle lunghe
-                  spezzate per frase nell'ultima colonna pipe.
+   - TABULAR    → gruppi di tabular_max_rows righe entro tabular_max_words parole
+                  (header ripetuto per gruppo, mai una riga spezzata); celle lunghe
+                  divise per frase.
    - LIST_HEAVY → voce per voce (marker espliciti o blocchi rientrati ~70%).
    - NARRATIVE  → semantic chunking (coseno tra frasi consecutive).
-4. Merge chunk sotto min_words + overlap di frasi (solo stesso tipo/sezione).
+4. Merge chunk sotto min_words (stesso tipo/sezione). Nessun overlap: i confini
+   adattivi sono gia' netti, l'overlap sporcherebbe solo l'embedding.
 """
 
 import re
@@ -175,11 +177,10 @@ def _split_last_cell(last_cell: str, combined_prefix: str, max_words: int) -> Li
 
 def _subsplit_tabular(text: str, max_words: int, min_words: int, max_rows: int = 0) -> List[str]:
     """
-    Riga per riga: header (se presente) ripetuto in ogni chunk.
-    Righe pipe-separate oversize spezzate nell'ultima cella.
-    max_rows > 0: taglia anche quando il chunk ha accumulato max_rows righe,
-    indipendentemente dal conteggio parole — utile per tenere ogni step
-    procedurale in un chunk separato e focalizzato.
+    Raggruppa righe consecutive in chunk di al piu' max_rows righe (se max_rows>0)
+    e comunque <= max_words parole (scatta il primo dei due limiti), header (se
+    presente) ripetuto in testa a ogni gruppo. Una tabella che entra in un solo
+    gruppo resta intera. Righe pipe-separate oversize sono spezzate nell'ultima cella.
     """
     lines = [l for l in text.split('\n') if l.strip()]
     if not lines:
@@ -284,11 +285,11 @@ def make_chunks_adaptive(
     ai: 'AI',
     max_words: int = 200,
     min_words: int = 20,
-    overlap_sentences: int = 1,
     similarity_threshold: float = 0.45,
     min_sentences: int = 1,
     max_sentences: int = 8,
-    tabular_max_rows: int = 0,
+    tabular_max_rows: int = 3,
+    tabular_max_words: int = 200,
     inject_section_heading: bool = True,
     heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS,
     indented_list_density: float = _INDENTED_LIST_DENSITY,
@@ -302,11 +303,15 @@ def make_chunks_adaptive(
     ai                    : oggetto AI (usato solo per embed() sui blocchi NARRATIVE)
     max_words             : limite morbido di parole per chunk (default 200)
     min_words             : chunk sotto questa soglia vengono uniti al precedente (default 20)
-    overlap_sentences     : frasi di overlap tra chunk consecutivi dello stesso tipo (default 1)
     similarity_threshold  : soglia coseno per taglio semantico (default 0.45)
     min_sentences         : frasi minime prima di un taglio semantico (default 1)
     max_sentences         : frasi massime per chunk NARRATIVE (default 8)
-    tabular_max_rows      : righe massime per chunk TABULAR; 0 = solo limite parole (default 0)
+    tabular_max_rows      : righe massime per chunk TABULAR (0 = solo limite parole).
+                            Raggruppa pochi step coerenti per chunk: focalizzato sui
+                            valori puntuali ma non frammentato a riga singola (default 3)
+    tabular_max_words     : tetto di parole per un chunk TABULAR, limite di sicurezza che
+                            scatta prima di tabular_max_rows per righe molto lunghe
+                            (default 200)
     inject_section_heading: se True, prefissa ogni chunk con il titolo della sezione
                             di appartenenza per ancorare il retrieval (default True)
     heading_like_max_words: righe numerate con <= N parole sono trattate come
@@ -361,13 +366,21 @@ def make_chunks_adaptive(
             continue
 
         for content_type, typed_text in _split_into_typed_blocks(block, heading_like_max_words, indented_list_density):
+            # Le tabelle passano sempre dal sub-split tabellare: raggruppa per righe
+            # (tabular_max_rows) entro un tetto di parole (tabular_max_words). Cosi'
+            # ogni chunk tiene insieme pochi step coerenti, senza frammentare a riga
+            # singola ne' diluire i valori puntuali in un blocco troppo grande.
+            if content_type == _TABULAR:
+                for chunk in _subsplit_tabular(typed_text, tabular_max_words, min_words, tabular_max_rows):
+                    if chunk.strip():
+                        raw_chunks.append((section_id, content_type, chunk.strip()))
+                continue
+
             if _word_count(typed_text) <= max_words:
                 raw_chunks.append((section_id, content_type, typed_text))
                 continue
 
-            if content_type == _TABULAR:
-                sub = _subsplit_tabular(typed_text, max_words, min_words, tabular_max_rows)
-            elif content_type == _LIST_HEAVY:
+            if content_type == _LIST_HEAVY:
                 sub = _subsplit_list(typed_text, max_words, min_words)
             else:
                 sub = _semantic_subsplit(
@@ -408,30 +421,8 @@ def make_chunks_adaptive(
             updated.append((section_id, content_type, chunk_text))
         merged = updated
 
-    # --- Fase 5: overlap di frasi (solo stesso tipo e stessa sezione) ---
-    if overlap_sentences <= 0 or len(merged) < 2:
-        return [t for _sid, _ctype, t in merged]
-
-    max_overlap_words = max(10, max_words // 4)
-    result: List[str] = [merged[0][2]]
-
-    for i in range(1, len(merged)):
-        prev_sid, prev_type, prev_text = merged[i - 1]
-        curr_sid, curr_type, curr_text = merged[i]
-
-        if curr_sid != prev_sid or curr_type != prev_type:
-            result.append(curr_text)
-            continue
-
-        prev_sentences = _split_sentences(prev_text)
-        n = min(overlap_sentences, len(prev_sentences))
-        if n == 0:
-            result.append(curr_text)
-            continue
-
-        prefix_words = ' '.join(prev_sentences[-n:]).split()
-        if len(prefix_words) > max_overlap_words:
-            prefix_words = prefix_words[-max_overlap_words:]
-        result.append((' '.join(prefix_words) + ' ' + curr_text).strip())
-
-    return result
+    # Nessun overlap: i confini adattivi (riga di tabella, voce di lista, taglio
+    # semantico) sono gia' netti. Ri-incollare la coda del chunk precedente non
+    # recupera nulla ai bordi e sporca soltanto l'embedding del nuovo chunk,
+    # peggiorando il retrieval. Le sezioni restano quindi pulite e disgiunte.
+    return [t for _sid, _ctype, t in merged]

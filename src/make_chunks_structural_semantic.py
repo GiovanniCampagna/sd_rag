@@ -2,9 +2,10 @@
 Structural-Semantic chunking: section headings as hard boundaries,
 semantic sub-splitting (cosine similarity) inside each section.
 
-Privacy property: no chunk and no overlap prefix ever crosses a section
-boundary, so sensitive content bound to one section cannot contaminate
-chunks belonging to another section via the embedding index.
+Privacy property: no chunk ever crosses a section boundary, so sensitive
+content bound to one section cannot contaminate chunks belonging to another
+section via the embedding index. No sentence overlap is applied (semantic cuts
+are clean topic boundaries; an overlap prefix would only blur embeddings).
 """
 
 from typing import List, Tuple, TYPE_CHECKING
@@ -12,7 +13,6 @@ from typing import List, Tuple, TYPE_CHECKING
 from make_chunks_structural import (
     _detect_sections,
     _word_count,
-    _split_sentences,
 )
 from make_chunks_semantic import (
     _semantic_subsplit,
@@ -30,7 +30,6 @@ def make_chunks_structural_semantic(
     similarity_threshold: float = 0.45,
     min_sentences: int = 1,
     max_sentences: int = 8,
-    overlap_sentences: int = 1,
 ) -> List[str]:
     """
     Chunks respect both section boundaries (hard) and semantic flow (soft).
@@ -42,7 +41,8 @@ def make_chunks_structural_semantic(
     similarity_threshold : cosine-sim threshold for semantic cuts (default 0.45)
     min_sentences        : minimum sentences before a semantic cut (default 1)
     max_sentences        : force a cut after this many sentences (default 8)
-    overlap_sentences    : overlap sentences between consecutive same-section chunks (default 1)
+
+    No sentence overlap is applied (semantic boundaries are clean topic cuts).
     """
     if not text or not text.strip():
         return []
@@ -83,26 +83,6 @@ def make_chunks_structural_semantic(
     if not merged:
         return []
 
-    # Phase 4 — Overlap within the same section only
-    if overlap_sentences <= 0 or len(merged) < 2:
-        return [text for _, text in merged]
-
-    max_overlap_words = max(10, max_words // 4)
-    result = [merged[0][1]]
-    for i in range(1, len(merged)):
-        prev_sid, prev_text = merged[i - 1]
-        curr_sid, curr_text = merged[i]
-        if curr_sid != prev_sid:
-            result.append(curr_text)
-            continue
-        sents = _split_sentences(prev_text)
-        n = min(overlap_sentences, len(sents))
-        if not n:
-            result.append(curr_text)
-            continue
-        prefix_words = ' '.join(sents[-n:]).split()
-        if len(prefix_words) > max_overlap_words:
-            prefix_words = prefix_words[-max_overlap_words:]
-        result.append((' '.join(prefix_words) + ' ' + curr_text).strip())
-
-    return result
+    # Nessun overlap: i tagli semantici sono confini di argomento netti,
+    # un prefisso di overlap sporcherebbe solo l'embedding del chunk successivo.
+    return [text for _, text in merged]
