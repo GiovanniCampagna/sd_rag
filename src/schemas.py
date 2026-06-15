@@ -68,7 +68,8 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
       similarity_threshold — cosine sim below which a cut is made (default 0.45).
       min_sentences        — minimum sentences before allowing a cut (default 1).
       max_sentences        — hard upper limit on chunk length (default 8).
-      overlap_sentences    — sentences of overlap between chunks (default 1).
+
+    No sentence overlap is applied (boundaries are clean topic cuts).
 
     chunk_method defaults to "word" when omitted, preserving full backward
     compatibility with existing configs and run files.
@@ -90,11 +91,10 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
         similarity_threshold — cosine-sim threshold for narrative sub-splitting (default 0.45).
         min_sentences        — min sentences before a semantic cut (default 1).
         max_sentences        — hard sentence cap per narrative chunk (default 8).
-        overlap_sentences    — sentences of overlap for narrative chunks only (default 1).
 
-      Adaptive note: adaptive does NOT apply sentence overlap (overlap_sentences is
-      ignored): its boundaries are already clean (table row / list item / semantic cut),
-      so overlap would only blur chunk embeddings and hurt retrieval.
+      Adaptive note: no sentence overlap is applied; its boundaries are already
+      clean (table row / list item / semantic cut), so overlap would only blur
+      chunk embeddings and hurt retrieval.
 
       Adaptive-only parameters:
         tabular_max_rows      — max table rows per TABULAR chunk (0 = word-limit only).
@@ -122,12 +122,10 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     similarity_threshold: float
     min_sentences: int
     max_sentences: int
-    overlap_sentences: int
 
     # structural params (used when chunk_method = "structural")
     structural_max_words: int    # soft word limit per chunk (default 200)
     structural_min_words: int    # chunks shorter than this are merged (default 20)
-    # overlap_sentences is shared with semantic (sentences of overlap, default 1)
 
     # adaptive-only params (used when chunk_method = "adaptive")
     tabular_max_rows: int        # max table rows per TABULAR chunk; 0 = word-limit only (default 3)
