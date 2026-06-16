@@ -82,6 +82,23 @@ def evaluate_one_metric(
                 'golden_constraints': [x['sensitive_category'] for x in oracle['relevant_sensitive_categories']],
             }
         
+        case 'coverage':
+
+            # Coverage del RETRIEVAL: quanti fatti-gold sono nel CONTESTO recuperato
+            # (non nella risposta). Riusa l'estrazione-fatti della completeness ma sul
+            # contesto. Il gap coverage - completeness = quanto il modello "spreca"
+            # il contesto recuperato (limite del modello piccolo).
+            res = get_completeness_score(
+                ai,
+                answer['original_context'],
+                oracle['redacted_answer_text'],
+            )
+            return {
+                'coverage_score': res['completeness_score'],
+                'coverage_golden_facts': res['golden_facts'],
+                'coverage_present_facts': res['present_facts'],
+            }
+
         case _:
             raise Exception(f'Unknown metric {metric}')
 

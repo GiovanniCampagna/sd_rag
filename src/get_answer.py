@@ -135,6 +135,17 @@ def get_answer(
                 query,
             )
     
+    # Token del contesto, contati col tokenizer del generatore (cache). Nessun
+    # rapporto: si affiancano alle altre metriche come colonna di costo.
+    # original_context_tokens = costo del retrieval/chunking (pre-redazione);
+    # answer_context_tokens   = testo davvero consegnato al generatore.
+    original_context_tokens = ai.g.count_tokens(context)
+    answer_context = {
+        'plain': context, 'mute': '', 'monolith': context,
+        'extract': redacted_context, 'rephrase': redacted_context,
+    }[config['generate']]
+    answer_context_tokens = ai.g.count_tokens(answer_context) if answer_context else 0
+
     return {
         'answer_id': str(uuid4()),
         'query_id': query_id,
@@ -149,6 +160,8 @@ def get_answer(
         'model_names': ai.model_names(),
         'original_context': context,
         'redacted_context': redacted_context,
+        'original_context_tokens': original_context_tokens,
+        'answer_context_tokens': answer_context_tokens,
         **config,
         **injection,
     }
