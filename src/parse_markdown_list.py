@@ -15,9 +15,12 @@ def parse_markdown_list(text: str, null_if_empty: bool = False) -> Optional[List
     # Remove optional quotes
     lines = [x.strip('"\'') for x in lines]
     lines = [x for x in lines if x.strip()]
-    # # If no items, return none
-    # if null_if_empty and not lines:
-    #     return None
+    # Se non ci sono elementi, ritorna None: così generate_and_check (is_valid)
+    # considera l'output non valido e fa il retry con invalidate=True, invece di
+    # accettare una lista vuota. Serve perché la generazione e' stocastica
+    # (temperature 0.2) e ~1 volta su 3 qwen collassa su un solo '-'.
+    if null_if_empty and not lines:
+        return None
 
     return lines
 
