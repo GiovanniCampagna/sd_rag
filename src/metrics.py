@@ -136,7 +136,17 @@ def get_completeness_score(
 ):
 
     golden_facts = extract_facts(ai, golden_answer)
-    assert golden_facts
+    if not golden_facts:
+        # Estrazione fatti vuota (gold molto corta o output non parsabile):
+        # completeness indefinita → None, l'eval prosegue invece di crashare.
+        # Vale anche per la metrica 'coverage', che riusa questa funzione.
+        log.info('No golden facts extracted; completeness/coverage = None for this record.')
+        return {
+            'golden_facts': [],
+            'actual_facts': [],
+            'present_facts': [],
+            'completeness_score': None,
+        }
     log.info(f'Extracted {len(golden_facts)} golden facts.')
     actual_facts = extract_facts(ai, actual_answer)
     log.info(f'Extracted {len(actual_facts)} actual facts.')
