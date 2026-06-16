@@ -57,28 +57,28 @@ def build_index(
         elif chunk_method == 'structural':
             chunk_texts = make_chunks_structural(
                 doc_text,
-                max_words=config.get('structural_max_words', 200),
-                min_words=config.get('structural_min_words', 20),
+                max_words=config.get('max_words', 200),
+                min_words=config.get('min_words', 20),
             )
             log.info(
                 f'Structural chunking: {len(chunk_texts)} chunks '
-                f'(max_words={config.get("structural_max_words", 200)}, '
-                f'min_words={config.get("structural_min_words", 20)})'
+                f'(max_words={config.get("max_words", 200)}, '
+                f'min_words={config.get("min_words", 20)})'
             )
         elif chunk_method == 'structural_semantic':
             chunk_texts = make_chunks_structural_semantic(
                 doc_text,
                 ai=ai,
-                max_words=config.get('structural_max_words', 200),
-                min_words=config.get('structural_min_words', 20),
+                max_words=config.get('max_words', 200),
+                min_words=config.get('min_words', 20),
                 similarity_threshold=config.get('similarity_threshold', 0.45),
                 min_sentences=config.get('min_sentences', 1),
                 max_sentences=config.get('max_sentences', 8),
             )
             log.info(
                 f'Structural-semantic chunking: {len(chunk_texts)} chunks '
-                f'(max_words={config.get("structural_max_words", 200)}, '
-                f'min_words={config.get("structural_min_words", 20)}, '
+                f'(max_words={config.get("max_words", 200)}, '
+                f'min_words={config.get("min_words", 20)}, '
                 f'threshold={config.get("similarity_threshold", 0.45)}, '
                 f'max_sentences={config.get("max_sentences", 8)})'
             )
@@ -86,8 +86,8 @@ def build_index(
             chunk_texts = make_chunks_adaptive(
                 doc_text,
                 ai=ai,
-                max_words=config.get('structural_max_words', 200),
-                min_words=config.get('structural_min_words', 20),
+                max_words=config.get('max_words', 200),
+                min_words=config.get('min_words', 20),
                 similarity_threshold=config.get('similarity_threshold', 0.45),
                 min_sentences=config.get('min_sentences', 1),
                 max_sentences=config.get('max_sentences', 8),
@@ -99,8 +99,8 @@ def build_index(
             )
             log.info(
                 f'Adaptive chunking: {len(chunk_texts)} chunks '
-                f'(max_words={config.get("structural_max_words", 200)}, '
-                f'min_words={config.get("structural_min_words", 20)}, '
+                f'(max_words={config.get("max_words", 200)}, '
+                f'min_words={config.get("min_words", 20)}, '
                 f'threshold={config.get("similarity_threshold", 0.45)}, '
                 f'max_sentences={config.get("max_sentences", 8)}, '
                 f'tabular_max_rows={config.get("tabular_max_rows", 3)}, '

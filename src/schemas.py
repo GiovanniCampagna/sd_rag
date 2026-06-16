@@ -86,8 +86,8 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
       No chunk ever crosses a section boundary.
 
       Parameters shared with structural/structural_semantic:
-        structural_max_words — soft word limit per narrative chunk (default 200).
-        structural_min_words — narrative chunks shorter than this are merged (default 20).
+        max_words            — soft word limit per narrative chunk (default 200).
+        min_words            — narrative chunks shorter than this are merged (default 20/25).
         similarity_threshold — cosine-sim threshold for narrative sub-splitting (default 0.45).
         min_sentences        — min sentences before a semantic cut (default 1).
         max_sentences        — hard sentence cap per narrative chunk (default 8).
@@ -112,7 +112,7 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
       iteration to build a knowledge graph of Section→Chunk→Actor edges
       without any additional parsing step.
     '''
-    chunk_method: str            # "word" | "semantic"
+    chunk_method: str            # "word" | "semantic" | "structural" | "structural_semantic" | "adaptive"
  
     # word-based params (required when chunk_method = "word")
     chunk_size_words: int
@@ -123,9 +123,9 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     min_sentences: int
     max_sentences: int
 
-    # structural params (used when chunk_method = "structural")
-    structural_max_words: int    # soft word limit per chunk (default 200)
-    structural_min_words: int    # chunks shorter than this are merged (default 20)
+    # word-cap / soglia-merge (usati da semantic, structural, structural_semantic, adaptive)
+    max_words: int               # limite morbido di parole per chunk (semantic 300; structural/struct-sem/adaptive 200)
+    min_words: int               # chunk piu' corti di questo uniti al precedente (structural/struct-sem 20; adaptive 25)
 
     # adaptive-only params (used when chunk_method = "adaptive")
     tabular_max_rows: int        # max table rows per TABULAR chunk; 0 = word-limit only (default 3)
