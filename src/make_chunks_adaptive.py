@@ -126,6 +126,29 @@ def _split_into_typed_blocks(
     return processed if processed else [(_NARRATIVE, text.strip())]
 
 
+def _attach_list_intros(typed_blocks: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
+    """
+    Unisce l'intro di una lista al suo elenco: un blocco NARRATIVE che termina con
+    ':' e seguito da un blocco LIST_HEAVY viene anteposto (come riga introduttiva)
+    al blocco lista, cosi' la frase che introduce l'elenco resta nello stesso chunk
+    invece di finire in un chunk separato.
+    """
+    out: List[Tuple[str, str]] = []
+    skip = False
+    for j, (ctype, ctext) in enumerate(typed_blocks):
+        if skip:
+            skip = False
+            continue
+        if (ctype == _NARRATIVE and j + 1 < len(typed_blocks)
+                and typed_blocks[j + 1][0] == _LIST_HEAVY
+                and ctext.rstrip().endswith(':')):
+            out.append((_LIST_HEAVY, ctext.rstrip() + '\n' + typed_blocks[j + 1][1]))
+            skip = True
+        else:
+            out.append((ctype, ctext))
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Strategie di sub-splitting
 # ---------------------------------------------------------------------------
@@ -269,7 +292,7 @@ def make_chunks_adaptive(
     text: str,
     ai: 'AI',
     max_words: int = 200,
-    min_words: int = 20,
+    min_words: int = 25,
     similarity_threshold: float = 0.45,
     min_sentences: int = 1,
     max_sentences: int = 8,
@@ -287,7 +310,7 @@ def make_chunks_adaptive(
     text                  : testo grezzo del documento
     ai                    : oggetto AI (usato solo per embed() sui blocchi NARRATIVE)
     max_words             : limite morbido di parole per chunk (default 200)
-    min_words             : chunk sotto questa soglia vengono uniti al precedente (default 20)
+    min_words             : chunk sotto questa soglia vengono uniti al precedente (default 25)
     similarity_threshold  : soglia coseno per taglio semantico (default 0.45)
     min_sentences         : frasi minime prima di un taglio semantico (default 1)
     max_sentences         : frasi massime per chunk NARRATIVE (default 8)
@@ -297,8 +320,11 @@ def make_chunks_adaptive(
     tabular_max_words     : tetto di parole per un chunk TABULAR, limite di sicurezza che
                             scatta prima di tabular_max_rows per righe molto lunghe
                             (default 200)
-    inject_section_heading: se True, prefissa ogni chunk con il titolo della sezione
-                            di appartenenza per ancorare il retrieval (default True)
+    inject_section_heading: se True, prefissa il titolo della sezione ai SOLI chunk
+                            TABULAR (le righe-tabella sono criptiche senza contesto);
+                            liste e narrativa restano senza, perché autoconsistenti
+                            (l'intro della lista è attaccata da _attach_list_intros)
+                            (default True)
     heading_like_max_words: righe numerate con <= N parole sono trattate come
                             intestazioni (NARRATIVE) e non come righe tabellari (default 10)
     indented_list_density : frazione di righe rientrate oltre la quale un blocco
@@ -350,7 +376,9 @@ def make_chunks_adaptive(
             raw_chunks.append((section_id, first_type, block))
             continue
 
-        for content_type, typed_text in _split_into_typed_blocks(block, heading_like_max_words, indented_list_density):
+        typed_blocks = _attach_list_intros(
+            _split_into_typed_blocks(block, heading_like_max_words, indented_list_density))
+        for content_type, typed_text in typed_blocks:
             # Le tabelle passano sempre dal sub-split tabellare: raggruppa per righe
             # (tabular_max_rows) entro un tetto di parole (tabular_max_words). Cosi'
             # ogni chunk tiene insieme pochi step coerenti, senza frammentare a riga
@@ -401,7 +429,11 @@ def make_chunks_adaptive(
         updated: List[Tuple[int, str, str]] = []
         for section_id, content_type, chunk_text in merged:
             heading = sid_to_heading.get(section_id, '')
-            if heading and not chunk_text.startswith(heading):
+            # Heading di sezione iniettato SOLO nei chunk TABULAR: lì le righe
+            # (es. "4.3.2 | ... | ...") sono criptiche senza il contesto della sezione.
+            # Liste e narrativa restano autoconsistenti (vedi _attach_list_intros) senza
+            # ripetere il titolo, che diluirebbe soltanto l'embedding.
+            if heading and content_type == _TABULAR and not chunk_text.startswith(heading):
                 chunk_text = heading + '\n' + chunk_text
             updated.append((section_id, content_type, chunk_text))
         merged = updated
