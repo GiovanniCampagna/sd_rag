@@ -59,8 +59,39 @@ def compare_priv_complet_score(df: pd.DataFrame):
 def compare_priv_score(df: pd.DataFrame):
 
     return df.groupby(['generate', 'inject'])[[
-        'privacy_score', 
+        'privacy_score',
     ]].mean()
+
+def compare_full_by_method(df: pd.DataFrame):
+    # Vista completa per METODO di chunking (label): tutte le metriche affiancate.
+    # Token/parole = colonne di COSTO (nessun rapporto). gap_gen = coverage - completeness
+    # = fatti nel contesto ma non nella risposta (quanto il modello piccolo "spreca").
+    import numpy as np
+
+    if 'completeness_score_judge_llm' in df.columns:
+        df['completeness_score_judge_llm'] = df['completeness_score_judge_llm'].map(
+            lambda x: x if isinstance(x, (int, float)) else np.nan)
+    if 'original_context' in df.columns:
+        df['ctx_words'] = df['original_context'].map(
+            lambda s: len(str(s).split()) if isinstance(s, str) else np.nan)
+
+    group = 'label' if 'label' in df.columns else 'chunk_method'
+    cols = [c for c in [
+        'completeness_score_judge_llm',   # qualità (giudice LLM)
+        'completeness_score',             # qualità (embedding/fatti)
+        'coverage_score',                 # retrieval: fatti-gold nel contesto
+        'original_context_tokens',        # costo: token contesto recuperato
+        'answer_context_tokens',          # costo: token passati al generatore
+        'ctx_words',                      # costo: parole di contesto
+        'privacy_score',
+        'constraint_retrieval_precision',
+        'constraint_retrieval_recall',
+    ] if c in df.columns]
+
+    table = df.groupby(group)[cols].mean()
+    if 'coverage_score' in table.columns and 'completeness_score' in table.columns:
+        table['gap_gen'] = table['coverage_score'] - table['completeness_score']
+    return table
 
 
 if __name__ == '__main__':
@@ -89,6 +120,7 @@ if __name__ == '__main__':
         'asr': compare_asr_interrogation,
         'privcomp': compare_priv_complet_score,
         'priv': compare_priv_score,
+        'full': compare_full_by_method,
     }
 
     for metric in args.metrics:
