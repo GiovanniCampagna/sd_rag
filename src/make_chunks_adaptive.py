@@ -128,10 +128,12 @@ def _split_into_typed_blocks(
 
 def _attach_list_intros(typed_blocks: List[Tuple[str, str]]) -> List[Tuple[str, str]]:
     """
-    Unisce l'intro di una lista al suo elenco: un blocco NARRATIVE che termina con
-    ':' e seguito da un blocco LIST_HEAVY viene anteposto (come riga introduttiva)
-    al blocco lista, cosi' la frase che introduce l'elenco resta nello stesso chunk
-    invece di finire in un chunk separato.
+    Attacca alla lista la sua riga introduttiva: se un blocco NARRATIVE termina con
+    ':' ed e' seguito da un blocco LIST_HEAVY, viene anteposta al blocco lista SOLO
+    l'ultima riga (l'intro che finisce con ':'); il resto della narrativa resta un
+    blocco a se'. Cosi' una narrativa lunga non viene inglobata nella lista (che non
+    la spezzerebbe semanticamente, generando un chunk enorme): solo la riga che
+    introduce l'elenco lo accompagna.
     """
     out: List[Tuple[str, str]] = []
     skip = False
@@ -142,7 +144,12 @@ def _attach_list_intros(typed_blocks: List[Tuple[str, str]]) -> List[Tuple[str, 
         if (ctype == _NARRATIVE and j + 1 < len(typed_blocks)
                 and typed_blocks[j + 1][0] == _LIST_HEAVY
                 and ctext.rstrip().endswith(':')):
-            out.append((_LIST_HEAVY, ctext.rstrip() + '\n' + typed_blocks[j + 1][1]))
+            lines = ctext.rstrip().split('\n')
+            intro = lines[-1].strip()
+            rest = '\n'.join(lines[:-1]).strip()
+            if rest:
+                out.append((_NARRATIVE, rest))
+            out.append((_LIST_HEAVY, intro + '\n' + typed_blocks[j + 1][1]))
             skip = True
         else:
             out.append((ctype, ctext))
