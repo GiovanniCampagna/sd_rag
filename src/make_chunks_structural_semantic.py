@@ -26,7 +26,7 @@ def make_chunks_structural_semantic(
     text: str,
     ai: 'AI',
     max_words: int = 200,
-    min_words: int = 20,
+    min_words: int = 25,
     similarity_threshold: float = 0.45,
     min_sentences: int = 1,
     max_sentences: int = 8,
@@ -37,7 +37,7 @@ def make_chunks_structural_semantic(
     Parameters
     ----------
     max_words            : soft word limit per chunk (default 200)
-    min_words            : chunks shorter than this merge into the previous (default 20)
+    min_words            : chunks shorter than this merge into the previous (default 25)
     similarity_threshold : cosine-sim threshold for semantic cuts (default 0.45)
     min_sentences        : minimum sentences before a semantic cut (default 1)
     max_sentences        : force a cut after this many sentences (default 8)

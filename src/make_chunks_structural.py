@@ -142,7 +142,7 @@ def _split_by_sentences(text: str, max_words: int) -> List[str]:
 def make_chunks_structural(
     text: str,
     max_words: int = 200,
-    min_words: int = 20,
+    min_words: int = 25,
 ) -> List[str]:
     """
     Split text into chunks that respect document structure (numbered and ALL-CAPS headings).
