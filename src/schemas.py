@@ -176,8 +176,6 @@ class Answer(QueryConfig, PromptLeakConfig):
     model_names: List[str]
     original_context: str
     redacted_context: str
-    original_context_tokens: int   # token del contesto recuperato (pre-redazione)
-    answer_context_tokens: int     # token del contesto davvero passato al generatore
  
 class TestConfig(BuildSDRAGIndexConfig, QueryConfig, PromptLeakConfig):
  
