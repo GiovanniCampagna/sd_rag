@@ -89,6 +89,21 @@ def _has_tabular_line(text: str, heading_like_max_words: int = _HEADING_LIKE_MAX
     )
 
 
+def _is_heading_only(text: str) -> bool:
+    """
+    True se il testo è una SOLA riga che è un'intestazione (numerata o ALL-CAPS).
+
+    Un'intestazione "nuda" — una sezione il cui corpo è solo il titolo, perché
+    subito seguita da una sotto-sezione (es. "GESTIONE DELLE EMERGENZE" seguita
+    da "4.1 ...") — diventerebbe un chunk-stub di poche parole. Non porta però
+    contenuto sensibile: solo il titolo. Può quindi essere unita in avanti alla
+    prima sotto-sezione ANCHE oltre il confine di sezione, senza violare la
+    separazione di privacy (non trasferisce dati, dà solo contesto di titolo).
+    """
+    s = text.strip()
+    return '\n' not in s and bool(_NHR.match(s) or _AHR.match(s))
+
+
 def _is_dense_indented_block(lines: List[str], density: float = _INDENTED_LIST_DENSITY) -> bool:
     """True se almeno `density` delle righe non vuote iniziano con 1-4 spazi (es. RIFERIMENTI)."""
     non_empty = [l for l in lines if l.strip()]
@@ -446,6 +461,34 @@ def make_chunks_adaptive(
             merged[-1] = (prev_sid, prev_type, prev_text + sep + chunk_text)
         else:
             merged.append((section_id, content_type, chunk_text))
+
+    # --- Fase 4 (avanti): orfani di inizio sezione ---
+    # Un chunk sotto min_words che NON ha potuto unirsi al precedente (perché è il
+    # PRIMO della sua sezione: il merge all'indietro non attraversa i confini di
+    # sezione, per la garanzia di privacy) viene unito al chunk SUCCESSIVO. Due casi:
+    #   - stessa sezione: es. un'intro corta che qualifica l'intestazione
+    #     ("(diametro fino a ~3 m…)") non resta isolata, restando dentro la sezione;
+    #   - intestazione "nuda" (titolo di sezione senza corpo, perché subito seguito
+    #     da una sotto-sezione, es. "GESTIONE DELLE EMERGENZE" prima di "4.1 ..."):
+    #     viene unita alla prima sotto-sezione ANCHE oltre il confine di sezione —
+    #     un titolo non trasferisce contenuto sensibile (vedi _is_heading_only).
+    # Se non c'è un successivo idoneo, resta com'è.
+    forwarded: List[Tuple[int, str, str]] = []
+    i = 0
+    while i < len(merged):
+        sid, ctype, text = merged[i]
+        heading_only = _is_heading_only(text)
+        if (_word_count(text) < min_words and i + 1 < len(merged)
+                and (merged[i + 1][0] == sid or heading_only)):
+            nsid, ntype, ntext = merged[i + 1]
+            sep = '\n' if (heading_only or ctype in (_TABULAR, _LIST_HEAVY)
+                           or ntype in (_TABULAR, _LIST_HEAVY)) else ' '
+            merged[i + 1] = (nsid, ntype, text + sep + ntext)
+            i += 1
+            continue
+        forwarded.append(merged[i])
+        i += 1
+    merged = forwarded
 
     if not merged:
         return []
