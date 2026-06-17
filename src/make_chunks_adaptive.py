@@ -72,6 +72,23 @@ def _classify_line(line: str, heading_like_max_words: int = _HEADING_LIKE_MAX_WO
     return _NARRATIVE
 
 
+def _has_tabular_line(text: str, heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS) -> bool:
+    """
+    True se almeno una riga non vuota del testo e' classificata TABULAR.
+
+    Serve a decidere l'iniezione dell'heading di sezione: una riga-tabella
+    (es. "4.3.2 | ... | ...") e' criptica senza il titolo della sezione anche
+    quando il chunk nel suo insieme e' etichettato NARRATIVE. Capita con le
+    sezioni corte (<= max_words) che iniziano con una frase di prosa e
+    proseguono con una tabella (tipizzate dal primo blocco), e con i chunk in
+    cui un blocco TABULAR e' stato unito a uno NARRATIVE nella fase di merge.
+    """
+    return any(
+        stripped and _classify_line(stripped, heading_like_max_words) == _TABULAR
+        for stripped in (line.strip() for line in text.split('\n'))
+    )
+
+
 def _is_dense_indented_block(lines: List[str], density: float = _INDENTED_LIST_DENSITY) -> bool:
     """True se almeno `density` delle righe non vuote iniziano con 1-4 spazi (es. RIFERIMENTI)."""
     non_empty = [l for l in lines if l.strip()]
@@ -197,7 +214,7 @@ def _split_last_cell(last_cell: str, combined_prefix: str, max_words: int) -> Li
     return chunks
 
 
-def _subsplit_tabular(text: str, max_words: int, min_words: int, max_rows: int = 0) -> List[str]:
+def _subsplit_tabular(text: str, max_words: int, max_rows: int = 0) -> List[str]:
     """
     Raggruppa righe consecutive in chunk di al piu' max_rows righe (se max_rows>0)
     e comunque <= max_words parole (scatta il primo dei due limiti). Una tabella che
@@ -254,7 +271,7 @@ def _subsplit_tabular(text: str, max_words: int, min_words: int, max_rows: int =
     return chunks if chunks else [text.strip()]
 
 
-def _subsplit_list(text: str, max_words: int, min_words: int) -> List[str]:
+def _subsplit_list(text: str, max_words: int) -> List[str]:
     """Voce per voce: ogni item (marker + continuazioni) è unità atomica."""
     lines = text.split('\n')
     item_groups: List[str] = []
@@ -327,11 +344,13 @@ def make_chunks_adaptive(
     tabular_max_words     : tetto di parole per un chunk TABULAR, limite di sicurezza che
                             scatta prima di tabular_max_rows per righe molto lunghe
                             (default 200)
-    inject_section_heading: se True, prefissa il titolo della sezione ai SOLI chunk
-                            TABULAR (le righe-tabella sono criptiche senza contesto);
-                            liste e narrativa restano senza, perché autoconsistenti
-                            (l'intro della lista è attaccata da _attach_list_intros)
-                            (default True)
+    inject_section_heading: se True, prefissa il titolo della sezione ai chunk che
+                            contengono righe tabellari — sia quelli etichettati TABULAR
+                            sia quelli NARRATIVE che però contengono una tabella (sezioni
+                            corte tipizzate dal primo blocco, o merge TABULAR→NARRATIVE):
+                            le righe-tabella sono criptiche senza contesto. Liste e prosa
+                            pura restano senza, perché autoconsistenti (l'intro della
+                            lista è attaccata da _attach_list_intros) (default True)
     heading_like_max_words: righe numerate con <= N parole sono trattate come
                             intestazioni (NARRATIVE) e non come righe tabellari (default 10)
     indented_list_density : frazione di righe rientrate oltre la quale un blocco
@@ -391,7 +410,7 @@ def make_chunks_adaptive(
             # ogni chunk tiene insieme pochi step coerenti, senza frammentare a riga
             # singola ne' diluire i valori puntuali in un blocco troppo grande.
             if content_type == _TABULAR:
-                for chunk in _subsplit_tabular(typed_text, tabular_max_words, min_words, tabular_max_rows):
+                for chunk in _subsplit_tabular(typed_text, tabular_max_words, tabular_max_rows):
                     if chunk.strip():
                         raw_chunks.append((section_id, content_type, chunk.strip()))
                 continue
@@ -401,7 +420,7 @@ def make_chunks_adaptive(
                 continue
 
             if content_type == _LIST_HEAVY:
-                sub = _subsplit_list(typed_text, max_words, min_words)
+                sub = _subsplit_list(typed_text, max_words)
             else:
                 sub = _semantic_subsplit(
                     typed_text, ai=ai, max_words=max_words,
@@ -419,7 +438,12 @@ def make_chunks_adaptive(
         if (merged and merged[-1][0] == section_id
                 and _word_count(chunk_text) < min_words):
             prev_sid, prev_type, prev_text = merged[-1]
-            merged[-1] = (prev_sid, prev_type, prev_text + ' ' + chunk_text)
+            # Separatore: newline quando uno dei due chunk è strutturato
+            # (tabella/lista), così righe e voci restano su righe distinte e
+            # l'embedding ne conserva la struttura; spazio per la prosa che scorre.
+            sep = '\n' if (prev_type in (_TABULAR, _LIST_HEAVY)
+                           or content_type in (_TABULAR, _LIST_HEAVY)) else ' '
+            merged[-1] = (prev_sid, prev_type, prev_text + sep + chunk_text)
         else:
             merged.append((section_id, content_type, chunk_text))
 
@@ -436,11 +460,17 @@ def make_chunks_adaptive(
         updated: List[Tuple[int, str, str]] = []
         for section_id, content_type, chunk_text in merged:
             heading = sid_to_heading.get(section_id, '')
-            # Heading di sezione iniettato SOLO nei chunk TABULAR: lì le righe
-            # (es. "4.3.2 | ... | ...") sono criptiche senza il contesto della sezione.
-            # Liste e narrativa restano autoconsistenti (vedi _attach_list_intros) senza
-            # ripetere il titolo, che diluirebbe soltanto l'embedding.
-            if heading and content_type == _TABULAR and not chunk_text.startswith(heading):
+            # Heading di sezione iniettato nei chunk che contengono righe tabellari:
+            # lì le righe (es. "4.3.2 | ... | ...") sono criptiche senza il contesto
+            # della sezione. Non basta il content_type del chunk: una sezione corta
+            # (<= max_words) viene tipizzata dal primo blocco, quindi puo' risultare
+            # NARRATIVE pur contenendo una tabella, e un TABULAR puo' essere stato
+            # unito a un NARRATIVE nel merge — per questo si guarda anche dentro il
+            # testo con _has_tabular_line. Liste e prosa pura restano senza heading
+            # (autoconsistenti, vedi _attach_list_intros), che diluirebbe l'embedding.
+            if (heading and not chunk_text.startswith(heading)
+                    and (content_type == _TABULAR
+                         or _has_tabular_line(chunk_text, heading_like_max_words))):
                 chunk_text = heading + '\n' + chunk_text
             updated.append((section_id, content_type, chunk_text))
         merged = updated

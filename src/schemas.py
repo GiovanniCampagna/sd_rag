@@ -74,16 +74,17 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     chunk_method defaults to "word" when omitted, preserving full backward
     compatibility with existing configs and run files.
 
-    Procedural chunking (chunk_method = "procedural"):
+    Adaptive chunking (chunk_method = "adaptive"):
       Designed for documents that mix narrative prose and operational tables
       of the form  N. | FASE | SOGGETTO RESPONSABILE | DESCRIZIONE
       (e.g. ISP-18 Rifornimento Carburante – Milan Bergamo Airport).
 
-      Each table row becomes ONE self-contained chunk prefixed with
-      machine-readable metadata tags:
-          [section:<label>] [type:table_row] [fase:<N>] [soggetto:<name>]
-      Narrative blocks use structural-semantic sub-splitting.
-      No chunk ever crosses a section boundary.
+      Section headings are hard boundaries; each block is classified
+      TABULAR / LIST_HEAVY / NARRATIVE and sub-split by a per-type strategy
+      (table rows grouped by tabular_max_rows within tabular_max_words; list
+      items kept atomic; narrative cut by cosine similarity). The section
+      heading is injected into any chunk that contains table rows (the rows
+      are cryptic without it). No chunk ever crosses a section boundary.
 
       Parameters shared with structural/structural_semantic:
         max_words            — soft word limit per narrative chunk (default 200).
@@ -108,9 +109,9 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
         indented_list_density  — fraction of indented lines above which a NARRATIVE block
                                  is reclassified as LIST_HEAVY (default 0.70).
 
-      Graph-RAG readiness: the metadata tags on each chunk allow the next
-      iteration to build a knowledge graph of Section→Chunk→Actor edges
-      without any additional parsing step.
+      Graph-RAG readiness: section boundaries and per-block typing are
+      preserved, so the next iteration can build a Section→Chunk→Actor
+      knowledge graph on top of these chunks.
     '''
     chunk_method: str            # "word" | "semantic" | "structural" | "structural_semantic" | "adaptive"
  

@@ -671,9 +671,13 @@ def get_similarity_scores(
 ) -> List[Tuple[W, float]]:
 
     assert len(candidates) == len(embeddings)
-    # Normalize all embeddings
-    query /= np.linalg.norm(query)
-    embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True)
+    # Normalize on copies: gli array in ingresso possono essere viste su buffer
+    # condivisi dal chiamante (es. metrics.py itera le righe di golden_embeddings
+    # e passa ogni riga come `query`, e build_index riusa lo stesso chunk_embeddings
+    # per ogni categoria). Un `/=` in-place muterebbe quei buffer; normalizziamo
+    # quindi su copie per non avere effetti collaterali fuori dalla funzione.
+    query = query / np.linalg.norm(query)
+    embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
     # Compute matrix-vector product
     scores = embeddings @ query.T
     # Flatten the scores
