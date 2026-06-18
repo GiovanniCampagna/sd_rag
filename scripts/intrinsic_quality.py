@@ -68,6 +68,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--corpus', required=True)
     ap.add_argument('--ai', default='configs/ai.config.nomic.only.json')
+    ap.add_argument('--out', default='results/tier1_intrinsic.json',
+                    help='dove salvare i risultati (JSON + tabella .md affianco)')
     args = ap.parse_args()
     ai = AI(*json.loads(open(args.ai).read()))
     corpus = json.load(open(args.corpus, encoding='utf-8'))
@@ -85,6 +87,7 @@ def main():
     hdr = (f'{"metodo":11} {"#chunk":>6} {"parole":>7} {"token":>6}  '
            f'{"righe_intatte":>13} {"liste_intatte":>13}  {"clean_bounds":>12} {"coerenza":>9}')
     print(hdr); print('-'*len(hdr))
+    out_methods = {}
     for m, fn in methods(ai).items():
         nch=0; w=[]; tok=[]; both=[]; coh=[]; rseen=set(); iseen=set()
         for t in texts:
@@ -99,13 +102,51 @@ def main():
                     if r in c: rseen.add(r)
                 for it in items:
                     if it in c: iseen.add(it)
-        ri = len(rseen)/len(rows) if rows else 0
-        li = len(iseen)/len(items) if items else 0
-        print(f'{m:11} {nch:>6} {np.mean(w):>7.0f} {np.mean(tok):>6.0f}  '
-              f'{ri:>13.3f} {li:>13.3f}  {np.mean(both):>12.3f} {np.mean(coh):>9.3f}')
+        out_methods[m] = {
+            'n_chunks': nch,
+            'avg_words': round(float(np.mean(w)), 1),
+            'avg_tokens': round(float(np.mean(tok)), 1),
+            'rows_intact': round(len(rseen)/len(rows), 3) if rows else 0.0,
+            'lists_intact': round(len(iseen)/len(items), 3) if items else 0.0,
+            'clean_bounds': round(float(np.mean(both)), 3),
+            'coherence': round(float(np.mean(coh)), 3),
+        }
+        d = out_methods[m]
+        print(f'{m:11} {nch:>6} {d["avg_words"]:>7.0f} {d["avg_tokens"]:>6.0f}  '
+              f'{d["rows_intact"]:>13.3f} {d["lists_intact"]:>13.3f}  '
+              f'{d["clean_bounds"]:>12.3f} {d["coherence"]:>9.3f}')
 
     print('\nNota: righe/liste_intatte = fedeltà strutturale (più alto = meglio, pro-adaptive).')
     print('      clean_bounds/coerenza premiano i chunk grandi (pro-semantic): solo per onestà.')
+
+    md = [f'# Tier 1 — Fedeltà strutturale dei chunk',
+          f'Corpus: `{args.corpus}` — {len(rows)} righe-tabella, {len(items)} voci di lista.', '',
+          '| metodo | #chunk | parole/chunk | token/chunk | righe intatte | liste intatte | clean_bounds | coerenza |',
+          '|---|---|---|---|---|---|---|---|']
+    for m, d in out_methods.items():
+        md.append(f'| {m} | {d["n_chunks"]} | {d["avg_words"]:.0f} | {d["avg_tokens"]:.0f} | '
+                  f'{d["rows_intact"]:.3f} | {d["lists_intact"]:.3f} | {d["clean_bounds"]:.3f} | {d["coherence"]:.3f} |')
+    md += ['', '_righe/liste intatte = fedeltà strutturale (pro-adaptive). '
+           'clean_bounds/coerenza premiano i chunk grandi (pro-semantic): solo per onestà._']
+    save_results(args.out, {
+        'metric': 'tier1_intrinsic',
+        'corpus': args.corpus,
+        'n_table_rows': len(rows),
+        'n_list_items': len(items),
+        'methods': out_methods,
+    }, '\n'.join(md) + '\n')
+
+
+def save_results(out_path, data, md_text):
+    """Salva i risultati come JSON e, affianco, una tabella .md leggibile."""
+    os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
+    with open(out_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    md_path = os.path.splitext(out_path)[0] + '.md'
+    with open(md_path, 'w', encoding='utf-8') as f:
+        f.write(md_text)
+    print(f'\nSalvato:\n  {out_path}\n  {md_path}')
+
 
 if __name__ == '__main__':
     main()

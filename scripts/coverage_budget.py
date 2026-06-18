@@ -67,6 +67,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--testset', required=True)
     ap.add_argument('--ai', default='configs/ai.config.nomic.only.json')
+    ap.add_argument('--out', default='results/tier2_coverage.json',
+                    help='dove salvare i risultati (JSON + tabella .md affianco)')
     args = ap.parse_args()
 
     ai = AI(*json.loads(open(args.ai).read()))
@@ -141,6 +143,49 @@ def main():
         row = f'{m:11} {np.mean(n_chunks[m]):>7.1f} {np.mean(chunk_tok[m]):>9.1f}  '
         row += '  '.join(f'{np.mean(valr[m][b]) if valr[m][b] else 0:>5.3f}' for b in BUDGETS)
         print(row)
+
+    # ---- salvataggio ----
+    out_methods = {}
+    for m in METHODS:
+        out_methods[m] = {
+            'n_chunks': round(float(np.mean(n_chunks[m])), 1),
+            'tok_per_chunk': round(float(np.mean(chunk_tok[m])), 1),
+            'coverage': {str(b): round(float(np.mean(cov[m][b])), 3) for b in BUDGETS},
+            'value_recall': {str(b): round(float(np.mean(valr[m][b])) if valr[m][b] else 0.0, 3) for b in BUDGETS},
+        }
+    def _tbl(title, key):
+        lines = [f'**{title}**', '',
+                 '| metodo | #chunk | tok/chunk | ' + ' | '.join(f'B={b}' for b in BUDGETS) + ' |',
+                 '|' + '---|'*(3+len(BUDGETS))]
+        for m, d in out_methods.items():
+            lines.append(f"| {m} | {d['n_chunks']:.1f} | {d['tok_per_chunk']:.0f} | "
+                         + ' | '.join(f"{d[key][str(b)]:.3f}" for b in BUDGETS) + ' |')
+        return '\n'.join(lines)
+    md = (f'# Tier 2 — Copertura @ budget di token\n'
+          f'Testset: `{args.testset}` — {sum(len(tc["qa_pairs"]) for tc in testset)} query '
+          f'(con valori puntuali: {n_val_queries}). Budget: {BUDGETS} token.\n\n'
+          + _tbl('Copertura semantica della gold-answer', 'coverage') + '\n\n'
+          + _tbl('Value-recall (valori puntuali)', 'value_recall') + '\n')
+    save_results(args.out, {
+        'metric': 'tier2_coverage_budget',
+        'testset': args.testset,
+        'n_queries': sum(len(tc['qa_pairs']) for tc in testset),
+        'n_value_queries': n_val_queries,
+        'budgets': BUDGETS,
+        'methods': out_methods,
+    }, md)
+
+
+def save_results(out_path, data, md_text):
+    """Salva i risultati come JSON e, affianco, una tabella .md leggibile."""
+    os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
+    with open(out_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    md_path = os.path.splitext(out_path)[0] + '.md'
+    with open(md_path, 'w', encoding='utf-8') as f:
+        f.write(md_text)
+    print(f'\nSalvato:\n  {out_path}\n  {md_path}')
+
 
 if __name__ == '__main__':
     main()
