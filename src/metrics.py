@@ -82,8 +82,30 @@ def evaluate_one_metric(
                 'golden_constraints': [x['sensitive_category'] for x in oracle['relevant_sensitive_categories']],
             }
         
+        case 'context-tokens':
+
+            return get_context_token_counts(ai, answer)
+
         case _:
             raise Exception(f'Unknown metric {metric}')
+
+
+def get_context_token_counts(ai: AI, answer: Answer) -> Dict[str, Any]:
+    """
+    Conta i token del contesto fornito all'LLM, col tokenizzatore del modello di
+    embedding (locale, coerente fra tutti i metodi di chunking). Serve a confrontare
+    la completeness a PARITA' di costo di contesto: il metodo di chunking migliore
+    e' quello che ottiene la stessa (o migliore) completeness con MENO token.
+      - context_tokens          : token del contesto recuperato (prima della redazione)
+      - redacted_context_tokens : token del contesto passato al generatore dopo la
+                                  redazione privacy (0 per monolith/plain)
+    """
+    orig = answer.get('original_context') or ''
+    red = answer.get('redacted_context') or ''
+    return {
+        'context_tokens': ai.e.count_tokens(orig) if orig else 0,
+        'redacted_context_tokens': ai.e.count_tokens(red) if red else 0,
+    }
 
 
 def get_completeness_score_judge_llm(

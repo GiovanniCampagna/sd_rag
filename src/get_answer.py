@@ -15,22 +15,33 @@ log = logging.getLogger(__name__)
 
 
 def retrieve_chunks(
-    ai: AI, 
-    query: str, 
-    index: SDRAGIndex, 
+    ai: AI,
+    query: str,
+    index: SDRAGIndex,
     limit: int,
+    token_budget: Optional[int] = None,
 ) -> List[Tuple[ChunkNode, float]]:
 
     chunks = list(index['chunks'].values())
     chunk_embeddings = ai.e.embed([c['text'] for c in chunks])
     query_embedding = ai.e.embed(query)
-    chunks_and_scores = get_similarity_scores(
-        query_embedding,
-        chunks,
-        chunk_embeddings,
-        limit,
-    )
-    return chunks_and_scores
+
+    # Se e' impostato un budget di token, ordiniamo TUTTI i chunk per similarita' e
+    # ne prendiamo i piu' rilevanti finche' non riempiamo il budget (sempre almeno
+    # uno). Cosi' i metodi di chunking si confrontano a parita' di contesto, non a
+    # numero di chunk fisso (che premierebbe i chunk piccoli). Altrimenti: top-`limit`.
+    if token_budget and token_budget > 0:
+        ranked = get_similarity_scores(query_embedding, chunks, chunk_embeddings, len(chunks))
+        out: List[Tuple[ChunkNode, float]] = []
+        tokens = 0
+        for chunk, score in ranked:
+            if tokens >= token_budget and out:
+                break
+            out.append((chunk, score))
+            tokens += ai.e.count_tokens(chunk['text'])
+        return out
+
+    return get_similarity_scores(query_embedding, chunks, chunk_embeddings, limit)
 
 def get_answer(
     ai: AI,
@@ -49,10 +60,11 @@ def get_answer(
 
     chunks_and_scores, time_retrieve_chunks_ms = timeit(
         retrieve_chunks,
-        ai, 
-        query, 
-        index, 
+        ai,
+        query,
+        index,
         config['limit_chunks'],
+        config.get('context_token_budget'),
     )
 
     chunks = [c for c, _ in chunks_and_scores]

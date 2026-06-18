@@ -59,8 +59,31 @@ def compare_priv_complet_score(df: pd.DataFrame):
 def compare_priv_score(df: pd.DataFrame):
 
     return df.groupby(['generate', 'inject'])[[
-        'privacy_score', 
+        'privacy_score',
     ]].mean()
+
+
+def compare_by_chunking_method(df: pd.DataFrame):
+    """
+    Confronto end-to-end PER METODO DI CHUNKING (raggruppa per 'label'): media di
+    token di contesto, completeness (embedding e giudice) e privacy. Da usare coi
+    risultati di configs.chunking.compare.json. Il metodo migliore e' quello con la
+    completeness piu' alta al MINOR numero di context_tokens (Livello B della metrica).
+    Usa solo le colonne presenti (l'eval puo' aver calcolato un sottoinsieme).
+    """
+    if 'completeness_score_judge_llm' in df.columns:
+        df['completeness_score_judge_llm'] = df['completeness_score_judge_llm'].map(
+            lambda x: x if isinstance(x, float) else 0
+        )
+    cols = [c for c in (
+        'context_tokens',
+        'redacted_context_tokens',
+        'completeness_score',
+        'completeness_score_judge_llm',
+        'privacy_score',
+    ) if c in df.columns]
+    group = ['label'] + [g for g in ('generate', 'inject') if g in df.columns]
+    return df.groupby(group)[cols].mean()
 
 
 if __name__ == '__main__':
@@ -89,6 +112,7 @@ if __name__ == '__main__':
         'asr': compare_asr_interrogation,
         'privcomp': compare_priv_complet_score,
         'priv': compare_priv_score,
+        'bychunk': compare_by_chunking_method,
     }
 
     for metric in args.metrics:
