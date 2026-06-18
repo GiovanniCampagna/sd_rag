@@ -96,7 +96,7 @@ eval_parser.add_argument(
     type=str,
     nargs='+',
     required=True,
-    choices=('completeness', 'completeness-judge', 'privacy', 'constraint-precision', 'constraint-recall', 'context-tokens')
+    choices=('completeness', 'completeness-judge', 'privacy', 'constraint-precision', 'constraint-recall')
 )
 
 eval_parser.add_argument(

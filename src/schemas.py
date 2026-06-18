@@ -128,13 +128,6 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     max_words: int               # limite morbido di parole per chunk (semantic 300; structural/struct-sem/adaptive 200)
     min_words: int               # chunk piu' corti di questo uniti al precedente (structural/struct-sem/adaptive 25)
 
-    # retrieval a budget di token (opzionale): se impostato, il retrieval recupera i
-    # chunk piu' simili alla query finche' non riempie questo numero di token di
-    # contesto, invece di prendere esattamente limit_chunks chunk. Serve a confrontare
-    # i metodi di chunking a PARITA' di contesto (Livello B della metrica). Token
-    # contati col tokenizzatore del modello di embedding (coerente fra i metodi).
-    context_token_budget: int
-
     # adaptive-only params (used when chunk_method = "adaptive")
     tabular_max_rows: int        # max table rows per TABULAR chunk; 0 = word-limit only (default 3)
     tabular_max_words: int       # word safety cap for a TABULAR chunk, applied alongside tabular_max_rows (default 200)
