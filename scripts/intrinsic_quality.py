@@ -119,7 +119,7 @@ def main():
     print('\nNota: righe/liste_intatte = fedeltà strutturale (più alto = meglio, pro-adaptive).')
     print('      clean_bounds/coerenza premiano i chunk grandi (pro-semantic): solo per onestà.')
 
-    md = [f'# Tier 1 — Fedeltà strutturale dei chunk',
+    md = ['# Tier 1 — Fedeltà strutturale dei chunk',
           f'Corpus: `{args.corpus}` — {len(rows)} righe-tabella, {len(items)} voci di lista.', '',
           '| metodo | #chunk | parole/chunk | token/chunk | righe intatte | liste intatte | clean_bounds | coerenza |',
           '|---|---|---|---|---|---|---|---|']

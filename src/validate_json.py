@@ -25,7 +25,7 @@ def validate_many(typed_dict: Type[T]):
             except DictMissingKeyException as e:
                 log.info('MISSING '+ e.key)
                 return None
-            except DictValueTypeMismatchException as e:
+            except DictValueTypeMismatchException:
                 return None
                 
         return data
@@ -47,9 +47,9 @@ def validate_one(typed_dict: Type[T]):
         try:
             if validate_typeddict(data, typed_dict, silent=False):
                 return data
-        except DictMissingKeyException as e:
+        except DictMissingKeyException:
             return None
-        except DictValueTypeMismatchException as e:
+        except DictValueTypeMismatchException:
             return None
             # Note that: library has a "problem", int is not considered instance of float.
             # TODO: this is a tmp fix, if there is more than one problem it will not work!

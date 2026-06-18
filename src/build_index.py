@@ -162,7 +162,7 @@ def build_index(
     
     log.info(f'Inserted {len(constraints)} constraints into index.')
     log.info(f'Inserted {len(constraint_edges)} constraints-chunk edges.')
-    log.info(f'Done building index.')
+    log.info('Done building index.')
  
     return {
         'chunk_constraint_edges': constraint_edges,
