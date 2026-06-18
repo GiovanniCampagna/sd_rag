@@ -124,14 +124,14 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     min_sentences: int
     max_sentences: int
 
-    # word-cap / soglia-merge (usati da semantic, structural, structural_semantic, adaptive)
-    max_words: int               # limite morbido di parole per chunk (semantic 300; structural/struct-sem/adaptive 200)
-    min_words: int               # chunk piu' corti di questo uniti al precedente (structural/struct-sem/adaptive 25)
+    # word cap / merge threshold (used by semantic, structural, structural_semantic, adaptive)
+    max_words: int               # soft word limit per chunk (semantic 300; structural/struct-sem/adaptive 200)
+    min_words: int               # chunks shorter than this are merged into a neighbour (structural/struct-sem/adaptive 25)
 
     # adaptive-only params (used when chunk_method = "adaptive")
     tabular_max_rows: int        # max table rows per TABULAR chunk; 0 = word-limit only (default 3)
     tabular_max_words: int       # word safety cap for a TABULAR chunk, applied alongside tabular_max_rows (default 200)
-    inject_section_heading: bool # prepend section heading to every chunk (default True)
+    inject_section_heading: bool # prepend section heading to chunks containing table rows (default True)
     heading_like_max_words: int  # numbered lines with <= N words = heading, not table (default 10)
     indented_list_density: float # indented-line fraction to reclassify NARRATIVE→LIST (default 0.70)
  

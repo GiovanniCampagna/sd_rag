@@ -400,9 +400,9 @@ class LLM:
         embed_batch_size: int = 1,
         invalidate: bool = False,
     ) -> np.ndarray:
-        # Usa una chiave hashata: i backend dbm (es. ndbm su Linux) hanno un
-        # limite sulla lunghezza della chiave, e i testi dei chunk possono
-        # superarlo causando KeyError. L'hash e' corto e di lunghezza fissa.
+        # Use a hashed key: dbm backends (e.g. ndbm on Linux) have a limit on the
+        # key length, and chunk texts can exceed it causing a KeyError. The hash is
+        # short and of fixed length.
         def ckey(text: str) -> str:
             return get_hash("<EMBED>" + text)
 
@@ -671,11 +671,11 @@ def get_similarity_scores(
 ) -> List[Tuple[W, float]]:
 
     assert len(candidates) == len(embeddings)
-    # Normalize on copies: gli array in ingresso possono essere viste su buffer
-    # condivisi dal chiamante (es. metrics.py itera le righe di golden_embeddings
-    # e passa ogni riga come `query`, e build_index riusa lo stesso chunk_embeddings
-    # per ogni categoria). Un `/=` in-place muterebbe quei buffer; normalizziamo
-    # quindi su copie per non avere effetti collaterali fuori dalla funzione.
+    # Normalize on copies: the input arrays may be views into buffers shared by the
+    # caller (e.g. metrics.py iterates the rows of golden_embeddings and passes each
+    # row as `query`, and build_index reuses the same chunk_embeddings for every
+    # category). An in-place `/=` would mutate those buffers; we therefore normalize
+    # on copies to avoid side effects outside the function.
     query = query / np.linalg.norm(query)
     embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)
     # Compute matrix-vector product

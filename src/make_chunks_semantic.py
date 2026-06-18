@@ -139,24 +139,8 @@ def make_chunks_semantic(
     if not text or not text.strip():
         return []
 
-    chunks = _semantic_subsplit(text, ai, max_words, similarity_threshold, min_sentences, max_sentences)
-
     # No overlap: if two chunks are separated it is because of a similarity drop
     # (topic change); re-pasting the previous sentence would only blur the new
-    # chunk's embedding and hurt retrieval.
-
-    # Hard word-count cap. Redundant safety net: _semantic_subsplit already caps to
-    # max_words via _cap, so this re-cap is normally a no-op; kept as a guard in case
-    # the upstream cap is ever disabled.
-    if max_words > 0:
-        capped: List[str] = []
-        for chunk in chunks:
-            words = chunk.split()
-            if len(words) <= max_words:
-                capped.append(chunk)
-            else:
-                for start in range(0, len(words), max_words):
-                    capped.append(' '.join(words[start:start + max_words]))
-        return capped
-
-    return chunks
+    # chunk's embedding and hurt retrieval. The word cap (max_words) is applied
+    # inside _semantic_subsplit via _cap, so no further capping is needed here.
+    return _semantic_subsplit(text, ai, max_words, similarity_threshold, min_sentences, max_sentences)
