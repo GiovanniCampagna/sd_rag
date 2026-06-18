@@ -40,8 +40,8 @@ def _word_count(s: str) -> int:
 
 
 
-# Abbreviazioni comuni nei documenti procedurali/normativi italiani che non devono
-# triggerare un taglio di frase (es. "par. 3.2", "art. 4", "Reg. (UE) n. 139/2014").
+# Common abbreviations in Italian procedural/regulatory documents that must not
+# trigger a sentence cut (e.g. "par. 3.2", "art. 4", "Reg. (UE) n. 139/2014").
 _ABBREV_RE = re.compile(
     r'\b(par|art|n|cfr|rev|agg|es|ecc|pag|fig|tab|vol|vs|all|lett|comma|cap|sez|'
     r'p\.es|S\.p\.A|S\.r\.l|S\.n\.c|S\.a\.s|D\.Lgs|D\.M|D\.P\.R|L)\.'
@@ -53,19 +53,19 @@ _SENTENCE_RE = re.compile(r'(?<=[.!?])\s+(?=[A-ZÀÈÌÒÙÁÉÍÓÚ\d\"])')
 
 def _split_sentences(text: str) -> List[str]:
     """
-    Sentence splitter condiviso da tutti i chunker.
+    Sentence splitter shared by all chunkers.
 
-    Gestisce:
-    - Soft line-wrap da PDF (singolo \\n dentro una frase → spazio)
-    - Abbreviazioni comuni (par., art., n., cfr., D.Lgs., S.p.A. ecc.)
-      che non devono spezzare la frase
-    - Separatori di paragrafo (\\n\\n) come confini duri tra frasi
-    - Righe pipe (col1 | col2 | col3) trattate come unità atomiche:
-      ogni riga pipe diventa il proprio paragrafo così non viene mai
-      fusa con la riga successiva dal collasso dei soft wrap
+    Handles:
+    - Soft line-wrap from PDF (a single \\n inside a sentence -> space)
+    - Common abbreviations (par., art., n., cfr., D.Lgs., S.p.A. etc.)
+      that must not break the sentence
+    - Paragraph separators (\\n\\n) as hard boundaries between sentences
+    - Pipe rows (col1 | col2 | col3) treated as atomic units: each pipe row
+      becomes its own paragraph so it is never merged with the next line
+      when the soft wraps are collapsed
     """
     text = text.strip()
-    # Righe pipe → confini duri (ogni riga pipe resta atomica)
+    # Pipe rows -> hard boundaries (each pipe row stays atomic)
     lines = text.split('\n')
     normalized: List[str] = []
     for line in lines:
@@ -73,13 +73,13 @@ def _split_sentences(text: str) -> List[str]:
         if ' | ' in line:
             normalized.append('')
     text = '\n'.join(normalized)
-    # Proteggi i parabreak prima di collassare i soft wrap
+    # Protect paragraph breaks before collapsing the soft wraps
     text = re.sub(r'\n{2,}', '\x00', text)
     text = text.replace('\n', ' ')
     text = text.replace('\x00', '\n\n')
 
-    # Maschera temporaneamente i punti di abbreviazione con un placeholder
-    # in modo che il pattern di frase non ci cada sopra
+    # Temporarily mask the abbreviation dots with a placeholder
+    # so the sentence pattern does not fire on them
     text = _ABBREV_RE.sub(lambda m: m.group(0)[:-1] + '\x01', text)
 
     result: List[str] = []
@@ -191,6 +191,6 @@ def make_chunks_structural(
     if not merged:
         return []
 
-    # Nessun overlap: i confini strutturali sono netti, l'overlap sporcherebbe
-    # solo l'embedding del chunk successivo.
+    # No overlap: structural boundaries are clean, an overlap prefix would only
+    # blur the next chunk's embedding.
     return merged

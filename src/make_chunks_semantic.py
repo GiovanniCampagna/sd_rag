@@ -19,9 +19,9 @@ def _word_count(s: str) -> int:
 
 def _split_sentences(text: str) -> List[str]:
     """
-    Wrapper di _split_sentences_base (make_chunks_structural) che aggiunge
-    i sentinel '' di paragrafo richiesti da _semantic_subsplit per trattare
-    i parabreak come hard cut semantici.
+    Wrapper around _split_sentences_base (make_chunks_structural) that adds the
+    empty-string '' paragraph sentinels required by _semantic_subsplit to treat
+    paragraph breaks as hard semantic cuts.
     """
     result: List[str] = []
     for para in re.split(r'\n{2,}', text.strip()):
@@ -49,10 +49,10 @@ def _semantic_subsplit(
     Used by make_chunks_semantic, make_chunks_structural_semantic, and make_chunks_adaptive.
     """
     def _cap(chs: List[str]) -> List[str]:
-        # Spezza i chunk oltre max_words quando il sentence splitter non riesce
-        # a dividere (es. frasi lunghissime per numeri/abbreviazioni come '3.3.5',
-        # 'par. 4.2'). Protegge structural_semantic e adaptive, che chiamano questa
-        # funzione direttamente (make_chunks_semantic ha gia' un cap esterno).
+        # Split chunks above max_words when the sentence splitter cannot divide them
+        # (e.g. very long sentences caused by numbers/abbreviations like '3.3.5',
+        # 'par. 4.2'). Protects structural_semantic and adaptive, which call this
+        # function directly (make_chunks_semantic already has an outer cap).
         if max_words <= 0:
             return chs
         out: List[str] = []
@@ -141,11 +141,13 @@ def make_chunks_semantic(
 
     chunks = _semantic_subsplit(text, ai, max_words, similarity_threshold, min_sentences, max_sentences)
 
-    # Nessun overlap: se due chunk sono separati e' per un calo di similarita'
-    # (cambio di argomento); ri-incollare la frase precedente sporcherebbe solo
-    # l'embedding del nuovo chunk e peggiorerebbe il retrieval.
+    # No overlap: if two chunks are separated it is because of a similarity drop
+    # (topic change); re-pasting the previous sentence would only blur the new
+    # chunk's embedding and hurt retrieval.
 
-    # Hard word-count cap (fallback for text the sentence splitter can't break)
+    # Hard word-count cap. Redundant safety net: _semantic_subsplit already caps to
+    # max_words via _cap, so this re-cap is normally a no-op; kept as a guard in case
+    # the upstream cap is ever disabled.
     if max_words > 0:
         capped: List[str] = []
         for chunk in chunks:

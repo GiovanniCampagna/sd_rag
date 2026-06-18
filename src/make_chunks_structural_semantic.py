@@ -83,6 +83,6 @@ def make_chunks_structural_semantic(
     if not merged:
         return []
 
-    # Nessun overlap: i tagli semantici sono confini di argomento netti,
-    # un prefisso di overlap sporcherebbe solo l'embedding del chunk successivo.
+    # No overlap: semantic cuts are clean topic boundaries, an overlap prefix would
+    # only blur the next chunk's embedding.
     return [text for _, text in merged]
