@@ -1,26 +1,26 @@
 """
-Metriche INTRINSECHE di qualità del chunk (Step 1): misurano la "raffinatezza" del
-chunking guardando i chunk in sé, SENZA query e SENZA generazione dell'LLM — quindi
-senza il rumore introdotto dal modello piccolo (che appiattisce le metriche end-to-end).
+INTRINSIC chunk-quality metrics (Step 1): they measure the chunking "refinement" by
+looking at the chunks themselves, WITHOUT a query and WITHOUT LLM generation -- so
+without the noise introduced by the small model (which flattens end-to-end metrics).
 
-Indicatori riportati, per ciascun metodo:
-  - #chunk, parole/chunk, token/chunk : granularità e dimensione (costo di contesto).
-  - righe_intatte   : frazione delle righe-tabella del corpus preservate INTERE in un
-                      chunk. È il tratto distintivo dell'adaptive: non spezza mai una
-                      riga (taglia solo nell'ultima cella se oversize).
-  - liste_intatte   : frazione delle voci di lista del corpus preservate INTERE.
-  - clean_bounds    : frazione di chunk che iniziano e finiscono su un confine pulito
-                      (frase/riga/voce). ⚠️ ATTENZIONE: premia i chunk GRANDI, quindi
-                      favorisce semantic; NON usare da sola come prova pro-adaptive.
-  - coerenza        : coseno medio fra frasi adiacenti dentro il chunk. ⚠️ Stessa
-                      avvertenza: favorisce i chunk grandi/discorsivi.
+Indicators reported, per method:
+  - #chunk, words/chunk, tokens/chunk : granularity and size (context cost).
+  - rows_intact   : fraction of the corpus table rows preserved WHOLE inside a chunk.
+                    It is adaptive's distinctive trait: it never splits a row (it only
+                    splits in the last cell when oversize).
+  - lists_intact  : fraction of the corpus list items preserved WHOLE.
+  - clean_bounds  : fraction of chunks that start and end on a clean boundary
+                    (sentence/row/item). WARNING: it rewards LARGE chunks, so it
+                    favours semantic; do NOT use it alone as pro-adaptive evidence.
+  - coherence     : mean cosine between adjacent sentences inside the chunk. Same
+                    warning: it favours large/prose chunks.
 
-Lettura per la tesi: la fedeltà strutturale (righe/liste intatte) è il punto di forza
-proprio dell'adaptive, soprattutto se letta INSIEME alla compattezza (token/chunk):
-massima fedeltà al minimo costo di contesto. clean_bounds/coerenza sono riportate solo
-per completezza e onestà (vanno contro l'adaptive).
+Reading for the thesis: structural fidelity (rows/lists intact) is adaptive's strength,
+especially when read TOGETHER with compactness (tokens/chunk): maximum fidelity at the
+minimum context cost. clean_bounds/coherence are reported only for completeness and
+honesty (they go against adaptive).
 
-Uso:
+Usage:
   env/Scripts/python.exe scripts/intrinsic_quality.py \
       --corpus datasets/corpus.json --ai configs/ai.config.nomic.only.json
 """
@@ -55,7 +55,7 @@ def clean_end(c):
     s = c.rstrip()
     if not s: return False
     if s[-1] in '.!?:;)”"': return True
-    return ' | ' in s.split('\n')[-1]   # riga-tabella = unità atomica
+    return ' | ' in s.split('\n')[-1]   # table row = atomic unit
 
 def coherence(c, ai):
     sents = [x for x in _split_sentences(c) if x.strip()]
@@ -69,13 +69,13 @@ def main():
     ap.add_argument('--corpus', required=True)
     ap.add_argument('--ai', default='configs/ai.config.nomic.only.json')
     ap.add_argument('--out', default='results/tier1_intrinsic.json',
-                    help='dove salvare i risultati (JSON + tabella .md affianco)')
+                    help='where to save the results (JSON + a .md table alongside)')
     args = ap.parse_args()
     ai = AI(*json.loads(open(args.ai).read()))
     corpus = json.load(open(args.corpus, encoding='utf-8'))
     texts = [v if isinstance(v, str) else v.get('text', '') for v in corpus.values()]
 
-    # unità strutturate "vere" presenti nel corpus
+    # "real" structural units present in the corpus
     rows, items = set(), set()
     for t in texts:
         for line in t.split('\n'):
@@ -138,7 +138,7 @@ def main():
 
 
 def save_results(out_path, data, md_text):
-    """Salva i risultati come JSON e, affianco, una tabella .md leggibile."""
+    """Save the results as JSON and, alongside, a readable .md table."""
     os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

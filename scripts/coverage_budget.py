@@ -1,25 +1,25 @@
 """
-Metrica "coverage@budget" (Livello A, locale) per confrontare i metodi di chunking
-sullo step 1 della tesi: "minimo contesto, miglior completezza".
+"coverage@budget" metric (Level A, local) to compare the chunking methods on step 1
+of the thesis: "minimum context, best completeness".
 
-Idea (equa, NON viziata dalla dimensione del chunk): per ogni query si recuperano i
-chunk per similarità coseno con la query finché non si riempie un BUDGET di token
-fisso; poi si misura quanta parte della gold-answer è coperta da quel contesto.
-A parità di budget il confronto è onesto: il metodo migliore copre di più la
-risposta con lo stesso numero di token (curva coverage(B) più alta / satura prima).
+Idea (fair, NOT biased by chunk size): for each query the chunks are retrieved by
+cosine similarity to the query until a fixed token BUDGET is filled; then we measure
+how much of the gold answer is covered by that context. At equal budget the
+comparison is honest: the best method covers more of the answer with the same number
+of tokens (a coverage(B) curve that is higher / saturates earlier).
 
-Due misure di copertura, entrambe locali (solo embedding nomic, niente generazione):
-  - cov  : copertura semantica = media, sulle frasi della gold, del max coseno con
-           le frasi del contesto (0..1, threshold-free). "Quanto del contenuto della
-           risposta è presente nel contesto."
-  - val  : value-recall = frazione dei valori distintivi della gold (numeri/codici/
-           telefoni/frequenze) presenti nel contesto. Mirata ai dati puntuali.
+Two coverage measures, both local (nomic embeddings only, no generation):
+  - cov  : semantic coverage = mean, over the gold sentences, of the max cosine with
+           the context sentences (0..1, threshold-free). "How much of the answer's
+           content is present in the context."
+  - val  : value-recall = fraction of the gold's distinctive values (numbers/codes/
+           phone numbers/frequencies) present in the context. Targets point data.
 
-NB: confronto a budget di TOKEN fisso → neutralizza il bias pro-chunk-piccoli che
-aveva affossato la vecchia 'tokeff'. Tokenizzazione con lo stesso modello per tutti
-i metodi (coerente). Retrieval per-test-case (come la pipeline non-merge).
+Note: comparison at a fixed TOKEN budget -> neutralizes the pro-small-chunk bias that
+had sunk the old 'tokeff'. Tokenization with the same model for all methods
+(consistent). Per-test-case retrieval (like the non-merge pipeline).
 
-Uso:
+Usage:
   env/Scripts/python.exe scripts/coverage_budget.py \
       --testset datasets/testset.json --ai configs/ai.config.nomic.only.json
 """
@@ -34,10 +34,9 @@ from make_chunks_structural import make_chunks_structural, _split_sentences
 from make_chunks_structural_semantic import make_chunks_structural_semantic
 from make_chunks_adaptive import make_chunks_adaptive
 
-BUDGETS = [100, 200, 400, 800]   # budget di token di contesto
-SIM_THR = 0.65                   # soglia per la copertura "hard" (riportata a parte)
+BUDGETS = [100, 200, 400, 800]   # context token budgets
 
-# ---- metodi di chunking, stessi default della pipeline ----
+# ---- chunking methods, same defaults as the pipeline ----
 def _baseline(text, ai):            return make_chunks(text, size=60, overlap=0)
 def _semantic(text, ai):            return make_chunks_semantic(text, ai=ai, max_words=300)
 def _structural(text, ai):          return make_chunks_structural(text, max_words=200, min_words=25)
@@ -68,13 +67,13 @@ def main():
     ap.add_argument('--testset', required=True)
     ap.add_argument('--ai', default='configs/ai.config.nomic.only.json')
     ap.add_argument('--out', default='results/tier2_coverage.json',
-                    help='dove salvare i risultati (JSON + tabella .md affianco)')
+                    help='where to save the results (JSON + a .md table alongside)')
     args = ap.parse_args()
 
     ai = AI(*json.loads(open(args.ai).read()))
     testset = json.load(open(args.testset, encoding='utf-8'))
 
-    # accumulatori: metodo -> budget -> liste per query
+    # accumulators: method -> budget -> per-query lists
     cov = {m: {b: [] for b in BUDGETS} for m in METHODS}
     valr = {m: {b: [] for b in BUDGETS} for m in METHODS}
     n_chunks = {m: [] for m in METHODS}
@@ -95,7 +94,7 @@ def main():
             for qa in tc['qa_pairs']:
                 gold = qa['unredacted_answer_text']
                 q_emb = ai.e.embed(qa['redacted_question_text'])[0]
-                # ranking chunk per similarità con la query
+                # rank chunks by similarity to the query
                 sims = (cemb / (np.linalg.norm(cemb, axis=1, keepdims=True) + 1e-9)) @ \
                        (q_emb / (np.linalg.norm(q_emb) + 1e-9))
                 order = list(np.argsort(-sims))
@@ -113,7 +112,7 @@ def main():
                             break
                         picked.append(chunks[idx]); tok += ctok[idx]
                     context = '\n'.join(picked)
-                    # copertura semantica (soft, threshold-free)
+                    # semantic coverage (soft, threshold-free)
                     if gemb is not None:
                         csents = _split_sentences(context)
                         if csents:
@@ -144,7 +143,7 @@ def main():
         row += '  '.join(f'{np.mean(valr[m][b]) if valr[m][b] else 0:>5.3f}' for b in BUDGETS)
         print(row)
 
-    # ---- salvataggio ----
+    # ---- save ----
     out_methods = {}
     for m in METHODS:
         out_methods[m] = {
@@ -177,7 +176,7 @@ def main():
 
 
 def save_results(out_path, data, md_text):
-    """Salva i risultati come JSON e, affianco, una tabella .md leggibile."""
+    """Save the results as JSON and, alongside, a readable .md table."""
     os.makedirs(os.path.dirname(out_path) or '.', exist_ok=True)
     with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
