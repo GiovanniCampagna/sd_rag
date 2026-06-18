@@ -1,42 +1,42 @@
 """
 extract_pdf.py
 ==============
-Estrae il testo da un PDF e produce un corpus JSON pronto per SD-RAG.
+Extracts the text from a PDF and produces a JSON corpus ready for SD-RAG.
 
 Pipeline
 --------
-1. Estrazione  — pdfplumber per tutto. Per ogni pagina:
-   · Trova le tabelle valide (>= 2 colonne).
-   · Testo narrativo: page.filter() esclude i caratteri nelle bbox
-     delle tabelle → righe pulite senza frammenti di celle.
-   · Testo tabellare: righe "col1 | col2 | col3".
-   · Righe narrative e tabelle vengono fuse e ordinate per posizione
-     verticale (top), così l'ordine di lettura del documento è preservato
-     anche quando una tabella e del testo coesistono sulla stessa pagina.
-   · Pagine senza tabelle: page.extract_text() direttamente.
+1. Extraction  -- pdfplumber for everything. For each page:
+   - Find the valid tables (>= 2 columns).
+   - Narrative text: page.filter() excludes the characters inside the table
+     bounding boxes -> clean lines without cell fragments.
+   - Tabular text: rows "col1 | col2 | col3".
+   - Narrative lines and tables are merged and sorted by vertical position
+     (top), so the document's reading order is preserved even when a table
+     and text coexist on the same page.
+   - Pages without tables: page.extract_text() directly.
 
-2. Pulizia     — su ogni pagina di contenuto:
-   a) righe ricorrenti >= 50% delle pagine → solo prima occorrenza
-   b) intestazioni tabellari ripetute (righe con '|') → rimosse del tutto (prima di (a))
-   c) numeri isolati 1-3 cifre → rimossi, salvo se su riga con titolo
-      maiuscolo (sarebbero numeri di sezione, non di pagina)
-   d) didascalie Figura/Tabella X → rimosse
-   e) righe di continuazione → unite alla riga precedente
+2. Cleaning    -- on each content page:
+   a) lines recurring in >= 50% of the pages -> keep only the first occurrence
+   b) repeated table headers (lines with '|') -> removed entirely (before (a))
+   c) isolated 1-3 digit numbers -> removed, unless on a line with an
+      uppercase title (those would be section numbers, not page numbers)
+   d) Figure/Table X captions -> removed
+   e) continuation lines -> joined to the previous line
 
-3. Sezioni     — scansiona il testo di ogni pagina cercando il pattern
-   pdfplumber per le intestazioni: riga che contiene solo
-   <numero> <TITOLO IN MAIUSCOLO>. Tiene l'ultima occorrenza di ogni
-   numero (corpo > indice). Restituisce (numero, titolo, pagina).
+3. Sections    -- scans the text of each page looking for the pdfplumber
+   heading pattern: a line containing only <number> <UPPERCASE TITLE>.
+   Keeps the last occurrence of each number (body > table of contents).
+   Returns (number, title, page).
 
-4. Corpus      — assembla ogni sezione per indici di pagina:
-   · prima pagina dal titolo in poi
-   · pagine intermedie intere
-   · tail: testo prima del titolo successivo sul suo stesso foglio
-   Cleanup finale: rimuove numeri in coda e contenuto sfuggito.
+4. Corpus      -- assembles each section by page indices:
+   - first page from the title onward
+   - whole intermediate pages
+   - tail: text before the next title on the same sheet
+   Final cleanup: removes trailing numbers and leaked content.
 
-5. Output      — JSON { "TITOLO": "testo" } con riga vuota tra sezioni.
+5. Output      -- JSON { "TITLE": "text" } with a blank line between sections.
 
-Genericità: nessuna stringa specifica del documento è hardcodata.
+Generality: no document-specific string is hardcoded.
 """
 
 import re
@@ -48,7 +48,7 @@ import pdfplumber
 
 
 # ===========================================================================
-# PARAMETRI
+# PARAMETERS
 # ===========================================================================
 
 TABLE_MIN_COLS           = 2
@@ -57,44 +57,44 @@ TABLE_HEADER_MAX_REPEATS = 1
 MAX_SECTION_NUM          = 20
 MIN_WORDS                = 40
 DOTS_RATIO_MAX           = 0.02
-AVG_WORDS_MIN            = 7.0   # parole medie/riga — filtra liste corte (acronimi)
+AVG_WORDS_MIN            = 7.0   # mean words/line -- filters out short lists (acronyms)
 
 PAGE_NUM_RE   = re.compile(r'^\d{1,3}$')
 CAPTION_RE    = re.compile(r'^(figura|figure|fig\.|tabella)\s+\d', re.IGNORECASE)
 ALLCAPS_RE    = re.compile(r'^[A-ZÀÈÉÌÒÙÄ\s\-–/&]{4,}$')
 SUBSECTION_RE = re.compile(r'^\d+\.\d+')
 
-# Pattern per intestazioni di sezione nel formato pdfplumber:
-# riga che contiene SOLO un numero intero seguito da titolo in maiuscolo.
-# Es: "6    REGISTRAZIONI" oppure "3  RESPONSABILITÀ ED AZIONI – OPERAZIONI NORMALI"
-# Nell'indice le stesse righe hanno "....." o numeri di pagina dopo il titolo
-# → non corrispondono al pattern → la deduplicazione (ultima occorrenza) le scarta.
+# Pattern for section headings in the pdfplumber format:
+# a line containing ONLY an integer followed by an uppercase title.
+# E.g. "6    REGISTRAZIONI" or "3  RESPONSABILITÀ ED AZIONI – OPERAZIONI NORMALI"
+# In the table of contents the same lines have "....." or page numbers after the
+# title -> they do not match the pattern -> dedup (last occurrence) discards them.
 SEC_RE = re.compile(
     r'(?m)^(\d+)[ \t]+([A-ZÀÈÉÌÒÙÄ][A-ZÀÈÉÌÒÙÄ \-–/&]{2,})\s*$'
 )
 
 
 # ===========================================================================
-# PASSO 1: Estrazione testo
+# STEP 1: Text extraction
 # ===========================================================================
 
 def _table_to_text(table: list[list[str | None]]) -> str:
     """
-    Converte una tabella pdfplumber in righe 'col1 | col2 | col3'.
+    Convert a pdfplumber table into 'col1 | col2 | col3' rows.
 
-    pdfplumber spezza una cella che va a capo in più righe-tabella con le prime
-    colonne vuote (es. ['', '', '', 'continua']). Una riga con prima cella vuota
-    è quindi la continuazione di quella precedente: le sue celle vengono fuse
-    colonna per colonna. Così si ricompongono i passi multi-linea e gli header
-    spezzati (rendendoli deduplicabili). Le celle vuote in coda sono rimosse per
-    non lasciare pipe spurie ('X |  |  | ').
+    pdfplumber splits a wrapped cell into several table rows with the first columns
+    empty (e.g. ['', '', '', 'continuation']). A row whose first cell is empty is
+    therefore the continuation of the previous one: its cells are merged column by
+    column. This reassembles multi-line steps and split headers (making them
+    dedup-able). Trailing empty cells are removed so as not to leave spurious pipes
+    ('X |  |  | ').
     """
     merged: list[list[str]] = []
     for row in table:
         cells = [(c.replace('\n', ' ').strip() if c else '') for c in row]
         if not any(cells):
             continue
-        # Continuazione: prima cella vuota e c'è una riga a cui agganciarsi
+        # Continuation: first cell empty and there is a row to attach to
         if merged and not cells[0]:
             prev = merged[-1]
             for i, c in enumerate(cells):
@@ -109,7 +109,7 @@ def _table_to_text(table: list[list[str | None]]) -> str:
 
     lines = []
     for cells in merged:
-        # Rimuovi celle vuote in coda (mantieni quelle vuote interne per allineamento)
+        # Remove trailing empty cells (keep internal empty ones for alignment)
         while cells and not cells[-1]:
             cells.pop()
         if cells:
@@ -119,9 +119,9 @@ def _table_to_text(table: list[list[str | None]]) -> str:
 
 def _not_in_bbox(obj: dict, bboxes: list[tuple]) -> bool:
     """
-    True se l'oggetto (carattere PDF) NON cade dentro nessuna delle bbox.
-    Usato da page.filter() per escludere il testo nelle celle delle tabelle.
-    Tolleranza di 1 pt per gestire leggeri disallineamenti tipografici.
+    True if the object (PDF character) does NOT fall inside any of the bboxes.
+    Used by page.filter() to exclude the text inside the table cells.
+    1 pt tolerance to handle slight typographic misalignments.
     """
     for x0, top, x1, bottom in bboxes:
         if (obj.get('x0', 0) >= x0 - 1 and
@@ -134,19 +134,19 @@ def _not_in_bbox(obj: dict, bboxes: list[tuple]) -> bool:
 
 def extract_pages_text(pdf_path: str) -> list[str]:
     """
-    Restituisce una stringa di testo per ogni pagina del PDF.
+    Return one text string per PDF page.
 
-    Pagine senza tabelle: page.extract_text() diretto.
-    Pagine con tabelle: righe narrative (escludendo i caratteri nelle bbox) e
-    blocchi tabellari vengono raccolti con la loro coordinata verticale (top) e
-    ordinati per posizione, così l'ordine di lettura resta corretto anche quando
-    tabella e testo coesistono sulla stessa pagina.
+    Pages without tables: page.extract_text() directly.
+    Pages with tables: narrative lines (excluding the characters inside the bboxes)
+    and tabular blocks are collected with their vertical coordinate (top) and sorted
+    by position, so the reading order stays correct even when a table and text
+    coexist on the same page.
     """
     pages_text: list[str] = []
 
     with pdfplumber.open(pdf_path) as pdf:
         for page in pdf.pages:
-            # Trova tabelle valide e pre-carica i dati
+            # Find valid tables and pre-load the data
             valid: list[tuple] = []
             for t in page.find_tables():
                 data = t.extract()
@@ -157,17 +157,17 @@ def extract_pages_text(pdf_path: str) -> list[str]:
                 pages_text.append(page.extract_text() or '')
                 continue
 
-            # Blocchi posizionati: (top, testo).
+            # Positioned blocks: (top, text).
             bboxes = [bbox for bbox, _ in valid]
             blocks: list[tuple[float, str]] = []
 
-            # Tabelle: ancorate al top della bbox (bbox = x0, top, x1, bottom)
+            # Tables: anchored to the top of the bbox (bbox = x0, top, x1, bottom)
             for bbox, data in valid:
                 table_text = _table_to_text(data)
                 if table_text.strip():
                     blocks.append((bbox[1], table_text))
 
-            # Righe narrative: escludi i caratteri dentro le bbox tabellari
+            # Narrative lines: exclude the characters inside the table bboxes
             narrative_lines = (
                 page.filter(lambda obj: _not_in_bbox(obj, bboxes))
                 .extract_text_lines()
@@ -183,15 +183,15 @@ def extract_pages_text(pdf_path: str) -> list[str]:
 
 
 # ===========================================================================
-# PASSO 2: Pulizia testo contenuto
+# STEP 2: Content text cleaning
 # ===========================================================================
 
 def _join_continuations(text: str) -> str:
     """
-    Unisce le righe di continuazione alla riga precedente.
-    Una riga è continuazione se inizia con lettera minuscola o virgola
-    e la riga precedente non termina con punteggiatura finale.
-    Righe tabellari (con '|') e intestazioni di sottosezione non vengono unite.
+    Join continuation lines to the previous line.
+    A line is a continuation if it starts with a lowercase letter or a comma
+    and the previous line does not end with final punctuation.
+    Table rows (with '|') and sub-section headings are not joined.
     """
     lines = text.split('\n')
     result: list[str] = []
@@ -214,9 +214,9 @@ def _join_continuations(text: str) -> str:
 
 
 def clean_content_pages(pages_text: list[str]) -> list[str]:
-    """Applica cinque filtri di pulizia a ogni pagina di contenuto."""
+    """Apply five cleaning filters to each content page."""
 
-    # a) Righe ricorrenti in >= RECURRING_PAGE_FRACTION delle pagine
+    # a) Lines recurring in >= RECURRING_PAGE_FRACTION of the pages
     line_page_count: Counter = Counter()
     for page in pages_text:
         for s in {l.strip() for l in page.split('\n') if l.strip()}:
@@ -224,7 +224,7 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
     threshold = max(2, len(pages_text) * RECURRING_PAGE_FRACTION)
     recurring = {s for s, n in line_page_count.items() if n >= threshold}
 
-    # b) Intestazioni tabellari (righe con '|') che si ripetono troppo
+    # b) Table headers (lines with '|') that repeat too often
     pipe_count: Counter = Counter()
     for page in pages_text:
         for line in page.split('\n'):
@@ -248,22 +248,22 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
             if not s:
                 page_out.append(line)
                 continue
-            # d) Didascalie figura/tabella
+            # d) Figure/table captions
             if CAPTION_RE.match(s):
                 continue
-            # c) Numero isolato: tienilo solo se precede un titolo maiuscolo
+            # c) Isolated number: keep it only if it precedes an uppercase title
             if PAGE_NUM_RE.match(s):
                 nxt = next((lines[j].strip() for j in range(idx + 1, len(lines))
                             if lines[j].strip()), '')
                 if not ALLCAPS_RE.match(nxt):
                     continue
-            # b) Header tabellari ripetuti → rimossi del tutto (anche la prima
-            #    occorrenza). Va PRIMA di (a): un header che ricorre in >=50%
-            #    delle pagine sarebbe altrimenti intercettato da 'ricorrenti' e
-            #    tenuto alla prima copia. Le righe-dato non sono ripetute → salve.
+            # b) Repeated table headers -> removed entirely (including the first
+            #    occurrence). Must come BEFORE (a): a header recurring in >=50% of
+            #    the pages would otherwise be caught by 'recurring' and kept at its
+            #    first copy. Data rows are not repeated -> safe.
             if s in repeated_headers:
                 continue
-            # a) Righe ricorrenti non tabellari (header/footer di pagina) → tieni la prima
+            # a) Recurring non-tabular lines (page header/footer) -> keep the first
             if s in recurring:
                 if s not in seen_recurring:
                     page_out.append(line)
@@ -271,20 +271,20 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
                 continue
             page_out.append(line)
 
-        # e) Unisci righe di continuazione
+        # e) Join continuation lines
         cleaned.append(_join_continuations('\n'.join(page_out)))
 
     return cleaned
 
 
 # ===========================================================================
-# PASSO 3: Rilevamento sezioni
+# STEP 3: Section detection
 # ===========================================================================
 
-# Pattern per titoli di sezione NON numerati: riga con solo testo maiuscolo
-# (es. "DEFINIZIONI", "RIFERIMENTI") — max 30 caratteri per escludere
-# intestazioni di tabelle lunghe come "PIAZZOLE DI SOSTA NON ABILITATE...".
-# Nessun ':' né '|' permessi per escludere etichette inline come "NOTA:".
+# Pattern for UNNUMBERED section titles: a line with only uppercase text
+# (e.g. "DEFINIZIONI", "RIFERIMENTI") -- max 30 characters to exclude long
+# table headers like "PIAZZOLE DI SOSTA NON ABILITATE...".
+# No ':' or '|' allowed, to exclude inline labels like "NOTA:".
 UNNUMBERED_SEC_RE = re.compile(
     r'(?m)^([A-ZÀÈÉÌÒÙÄ][A-ZÀÈÉÌÒÙÄ \-–/&]{2,28})\s*$'
 )
@@ -292,34 +292,33 @@ UNNUMBERED_SEC_RE = re.compile(
 
 def detect_sections(pages_text: list[str], max_section_num: int = MAX_SECTION_NUM) -> list[tuple[int, str, int]]:
     """
-    Scansiona il testo di ogni pagina cercando due tipi di intestazione:
+    Scan the text of each page looking for two kinds of heading:
 
-    1. Numerata: riga con solo '<numero> <TITOLO MAIUSCOLO>'.
-       Es: "3  RESPONSABILITÀ ED AZIONI – OPERAZIONI NORMALI"
+    1. Numbered: a line with only '<number> <UPPERCASE TITLE>'.
+       E.g. "3  RESPONSABILITÀ ED AZIONI – OPERAZIONI NORMALI"
 
-    2. Non numerata: riga con solo testo maiuscolo (max 30 char).
-       Es: "DEFINIZIONI", "RIFERIMENTI".
-       Consente di estrarre sezioni prive di numero ma ricche di contenuto
-       utile per il RAG, come le definizioni dei termini chiave.
+    2. Unnumbered: a line with only uppercase text (max 30 chars).
+       E.g. "DEFINIZIONI", "RIFERIMENTI".
+       Lets us extract sections that have no number but are rich in content
+       useful for the RAG, such as the definitions of key terms.
 
-    In entrambi i casi tiene l'ultima occorrenza (corpo > indice):
-    nell'indice i titoli appaiono con "....." o numeri di pagina dopo,
-    quindi NON corrispondono ai pattern e non vengono catturati lì —
-    viene catturata solo l'occorrenza nel corpo del documento.
+    In both cases it keeps the last occurrence (body > table of contents):
+    in the ToC the titles appear with "....." or page numbers after them, so
+    they do NOT match the patterns and are not captured there -- only the
+    occurrence in the document body is captured.
 
-    Le sezioni senza contenuto sufficiente (INDICE, acronimi, ecc.) vengono poi
-    scartate da is_informative.
+    Sections without enough content (INDICE, acronyms, etc.) are then discarded
+    by is_informative.
 
-    Restituisce [(numero, titolo, indice_pagina)] ordinato per pagina. I titoli
-    non numerati ricevono un numero convenzionale (1000+pagina) per il solo
-    ordinamento, non visibile nel corpus finale.
+    Returns [(number, title, page_index)] sorted by page. Unnumbered titles get a
+    conventional number (1000+page) for ordering only, not visible in the final corpus.
     """
     numbered:   dict[int, tuple[int, str, int]] = {}
     unnumbered: dict[str, tuple[int, str, int]] = {}
 
     for page_idx, page_text in enumerate(pages_text):
 
-        # Sezioni numerate
+        # Numbered sections
         for m in SEC_RE.finditer(page_text):
             num   = int(m.group(1))
             title = m.group(2).strip()
@@ -327,13 +326,13 @@ def detect_sections(pages_text: list[str], max_section_num: int = MAX_SECTION_NU
                 continue
             numbered[num] = (num, title, page_idx)
 
-        # Sezioni non numerate
+        # Unnumbered sections
         for m in UNNUMBERED_SEC_RE.finditer(page_text):
             title = m.group(1).strip()
             if len(title) < 4:
                 continue
-            # Ultima occorrenza vince (la prima è nell'indice con ".....",
-            # che non matcha il pattern — quindi qui siamo già nel corpo)
+            # Last occurrence wins (the first is in the ToC with ".....", which
+            # does not match the pattern -- so here we are already in the body)
             unnumbered[title] = (1000 + page_idx, title, page_idx)
 
     combined = list(numbered.values()) + list(unnumbered.values())
@@ -341,11 +340,11 @@ def detect_sections(pages_text: list[str], max_section_num: int = MAX_SECTION_NU
 
 
 # ===========================================================================
-# PASSO 4: Filtro sezioni informative
+# STEP 4: Informative-section filter
 # ===========================================================================
 
 def is_informative(text: str) -> bool:
-    """True se la sezione ha contenuto sufficiente per il forge di SD-RAG."""
+    """True if the section has enough content for the SD-RAG forge."""
     words = text.split()
     if len(words) < MIN_WORDS:
         return False
@@ -354,20 +353,20 @@ def is_informative(text: str) -> bool:
     non_empty = [l for l in text.split('\n') if l.strip()]
     if not non_empty:
         return False
-    # Escludi righe pipe dal denominatore: hanno ~3-5 parole per riga e
-    # abbasserebbero la media penalizzando sezioni procedurali a struttura tabellare
+    # Exclude pipe rows from the denominator: they have ~3-5 words per line and
+    # would lower the average, penalizing procedural sections with a tabular structure
     narrative_lines = [l for l in non_empty if ' | ' not in l]
     if not narrative_lines:
-        return True  # sezione puramente tabellare con abbastanza parole
+        return True  # purely tabular section with enough words
     return len(words) / len(narrative_lines) >= AVG_WORDS_MIN
 
 
 # ===========================================================================
-# PASSO 5: Costruzione corpus
+# STEP 5: Corpus construction
 # ===========================================================================
 
 def _strip_trailing_nums(text: str) -> str:
-    """Rimuove righe vuote e numeri isolati in coda al testo."""
+    """Remove blank lines and isolated numbers at the end of the text."""
     lines = text.split('\n')
     while lines and (not lines[-1].strip()
                      or PAGE_NUM_RE.match(lines[-1].strip())):
@@ -380,11 +379,11 @@ def build_corpus(
     sections:      list[tuple[int, str, int]]
 ) -> dict[str, str]:
     """
-    Assembla ogni sezione per indici di pagina:
-    · prima pagina dal titolo in poi
-    · pagine intermedie intere
-    · tail: testo prima del titolo successivo sul suo stesso foglio
-    Cleanup finale: numeri in coda e bleed da sezioni brevi adiacenti.
+    Assemble each section by page indices:
+    - first page from the title onward
+    - whole intermediate pages
+    - tail: text before the next title on the same sheet
+    Final cleanup: trailing numbers and bleed from adjacent short sections.
     """
     corpus: dict[str, str] = {}
     total  = len(cleaned_pages)
@@ -416,7 +415,7 @@ def build_corpus(
             parts        = [p for p in [first_from_title, middle, tail] if p.strip()]
             section_text = '\n'.join(parts).strip()
 
-        # Cleanup finale
+        # Final cleanup
         section_text = _strip_trailing_nums(section_text)
         if next_title:
             leak_re = re.compile(r'\n\d*\s*\n?' + re.escape(next_title))
@@ -424,10 +423,10 @@ def build_corpus(
             if m:
                 section_text = _strip_trailing_nums(section_text[:m.start()])
 
-        # Unisci le frasi spezzate ai confini di pagina: _join_continuations
-        # gira per pagina durante la pulizia, ma i confini tra pagine
-        # consecutive vengono assemblati in build_corpus — una seconda
-        # passata sul testo finale cattura i casi rimasti.
+        # Join sentences split across page boundaries: _join_continuations runs
+        # per page during cleaning, but the boundaries between consecutive pages
+        # are assembled in build_corpus -- a second pass over the final text
+        # catches the remaining cases.
         section_text = _join_continuations(section_text)
 
         if is_informative(section_text):
@@ -437,11 +436,11 @@ def build_corpus(
 
 
 # ===========================================================================
-# PASSO 6: Salvataggio
+# STEP 6: Save
 # ===========================================================================
 
 def save_corpus(corpus: dict[str, str], output_path: str) -> None:
-    """Salva il corpus JSON con riga vuota tra ogni sezione."""
+    """Save the JSON corpus with a blank line between each section."""
     items = []
     for title, body in corpus.items():
         key_j = json.dumps(title, ensure_ascii=False)
@@ -458,38 +457,38 @@ def save_corpus(corpus: dict[str, str], output_path: str) -> None:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description='Estrae testo da un PDF strutturato e produce un corpus JSON per SD-RAG.'
+        description='Extracts text from a structured PDF and produces a JSON corpus for SD-RAG.'
     )
-    parser.add_argument('pdf', help='Percorso del file PDF da elaborare')
-    parser.add_argument('output', help='Percorso del file JSON di output')
+    parser.add_argument('pdf', help='Path of the PDF file to process')
+    parser.add_argument('output', help='Path of the output JSON file')
     parser.add_argument(
         '--max-sections', type=int, default=MAX_SECTION_NUM,
-        help=f'Numero massimo di sezione principale (default: {MAX_SECTION_NUM})'
+        help=f'Maximum top-level section number (default: {MAX_SECTION_NUM})'
     )
     args = parser.parse_args()
 
-    print('1. Estrazione testo...')
+    print('1. Text extraction...')
     pages_text = extract_pages_text(args.pdf)
     table_pages = sum(1 for p in pages_text if ' | ' in p)
-    print(f'   Pagine: {len(pages_text)}  |  con tabelle: {table_pages}')
+    print(f'   Pages: {len(pages_text)}  |  with tables: {table_pages}')
 
-    print('2. Pulizia testo...')
+    print('2. Text cleaning...')
     cleaned_pages = clean_content_pages(pages_text)
-    print(f'   Caratteri totali: {sum(len(p) for p in cleaned_pages)}')
+    print(f'   Total characters: {sum(len(p) for p in cleaned_pages)}')
 
-    print('3. Rilevamento sezioni (su testo pulito)...')
+    print('3. Section detection (on cleaned text)...')
     sections = detect_sections(cleaned_pages, max_section_num=args.max_sections)
-    print(f'   Sezioni rilevate: {len(sections)}')
+    print(f'   Sections detected: {len(sections)}')
     for num, title, pg in sections:
-        print(f'      SEC {num:2d}  pag={pg:3d}  "{title[:55]}"')
+        print(f'      SEC {num:2d}  page={pg:3d}  "{title[:55]}"')
 
-    print('4. Costruzione corpus...')
+    print('4. Corpus construction...')
     corpus = build_corpus(cleaned_pages, sections)
-    print(f'   Mantenute: {len(corpus)}  |  Scartate: {len(sections) - len(corpus)}')
+    print(f'   Kept: {len(corpus)}  |  Discarded: {len(sections) - len(corpus)}')
     for title, body in corpus.items():
-        print(f'      OK  "{title[:55]}"  ({len(body.split())} parole)')
+        print(f'      OK  "{title[:55]}"  ({len(body.split())} words)')
 
-    print('5. Salvataggio corpus...')
+    print('5. Saving corpus...')
     save_corpus(corpus, args.output)
-    print(f'   Salvato in: {args.output}')
+    print(f'   Saved to: {args.output}')
     print('OK')
