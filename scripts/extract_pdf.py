@@ -6,37 +6,31 @@ Extracts the text from a PDF and produces a JSON corpus ready for SD-RAG.
 Pipeline
 --------
 1. Extraction  -- pdfplumber for everything. For each page:
-   - Find the valid tables (>= 2 columns).
+   - Find the valid tables (>= 2 columns). A table whose rows are separated by
+     whitespace instead of horizontal rules (ruled columns only) is rebuilt from
+     its vertical lines + the text layout (_extract_spaced_table).
    - Narrative text: page.filter() excludes the characters inside the table
      bounding boxes -> clean lines without cell fragments.
    - Tabular text: rows "col1 | col2 | col3".
    - Narrative lines and tables are merged and sorted by vertical position
      (top), so the document's reading order is preserved even when a table
      and text coexist on the same page.
-   - Pages without tables: page.extract_text() directly.
 
-2. Cleaning    -- on each content page:
-   a) lines recurring in >= 50% of the pages -> keep only the first occurrence
-   b) repeated table headers (lines with '|') -> removed entirely (before (a))
-   c) isolated 1-3 digit numbers -> removed, unless on a line with an
-      uppercase title (those would be section numbers, not page numbers)
-   d) Figure/Table X captions -> removed
-   e) continuation lines -> joined to the previous line
+2. Cleaning    -- on each content page: drop recurring header/footer lines,
+   repeated table headers, isolated page numbers and Figure/Table captions, and
+   join continuation lines.
 
-3. Sections    -- scans the text of each page looking for the pdfplumber
-   heading pattern: a line containing only <number> <UPPERCASE TITLE>.
-   Keeps the last occurrence of each number (body > table of contents).
-   Returns (number, title, page).
+3. Sections    -- primary: read the table of contents and take its CHAPTER titles
+   (the entries printed in BOLD; sub-entries are not). The chapters are then
+   located in the body. Fallback (no parseable ToC): detect headings by pattern
+   (numbered / all-caps). Sections below SECTION_MIN_WORDS are merged into a
+   neighbour.
 
-4. Corpus      -- assembles each section by page indices:
-   - first page from the title onward
-   - whole intermediate pages
-   - tail: text before the next title on the same sheet
-   Final cleanup: removes trailing numbers and leaked content.
+4. Corpus      -- assembles each section between consecutive headings and emits
+   JSON { "TITLE": "text" }.
 
-5. Output      -- JSON { "TITLE": "text" } with a blank line between sections.
-
-Generality: no document-specific string is hardcoded.
+Generality: no document-specific string is hardcoded; sectioning relies on the
+ToC's own bold styling, which marks chapters in virtually every document.
 """
 
 import re
@@ -325,7 +319,71 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
 
 # ===========================================================================
 # STEP 3: Section detection
+#
+# Primary: read the table of contents and take its CHAPTER titles -- the entries
+# printed in BOLD (sub-entries are not bold). Generic for any document whose ToC
+# marks chapters in bold. Fallback (no parseable ToC): detect headings by pattern.
 # ===========================================================================
+
+LEADER_RE       = re.compile(r'^(.+?)[.\s]{2,}\d+\s*$')  # ToC entry: "Title ..... 42"
+TOC_MIN_LEADERS = 5                                       # >= this many leader lines = a ToC page
+
+
+def _norm(s: str) -> str:
+    """Lowercase and collapse whitespace, for tolerant title matching."""
+    return re.sub(r'\s+', ' ', s).strip().lower()
+
+
+def _is_bold(fontname: str) -> bool:
+    return 'bold' in (fontname or '').lower()
+
+
+def parse_toc(pdf_path: str) -> tuple[list[str], set[int]]:
+    """
+    Return (chapter_titles, toc_page_indices). Chapter titles are the ToC entries
+    in BOLD; toc_page_indices are the pages recognised as table of contents (a page
+    with >= TOC_MIN_LEADERS dot-leader lines) so they can be dropped from the body.
+    """
+    titles: list[str] = []
+    toc_pages: set[int] = set()
+    with pdfplumber.open(pdf_path) as pdf:
+        for i, page in enumerate(pdf.pages):
+            text = page.extract_text() or ''
+            if sum(1 for l in text.split('\n') if LEADER_RE.match(l.strip())) < TOC_MIN_LEADERS:
+                continue
+            toc_pages.add(i)
+            for ln in page.extract_text_lines():     # read fonts only on ToC pages
+                m = LEADER_RE.match(ln['text'].strip())
+                if not m:
+                    continue
+                head = [c for c in ln['chars'] if c['text'].strip(' .')][:6]
+                if head and all(_is_bold(c['fontname']) for c in head):
+                    title = m.group(1).strip(' .')
+                    if len(title) >= 3:
+                        titles.append(title)
+    return titles, toc_pages
+
+
+def detect_sections(cleaned_pages: list[str], toc_titles: list[str],
+                    max_section_num: int = MAX_SECTION_NUM) -> list[tuple[int, str, int]]:
+    """Section boundaries: from the ToC chapters if available, else by pattern."""
+    if toc_titles:
+        return _sections_from_toc(cleaned_pages, toc_titles)
+    return _sections_from_patterns(cleaned_pages, max_section_num)
+
+
+def _sections_from_toc(cleaned_pages: list[str], toc_titles: list[str]) -> list[tuple[int, str, int]]:
+    """Locate each bold ToC chapter in the body -> (order, body_heading, page_index)."""
+    sections: list[tuple[int, str, int]] = []
+    for title in toc_titles:
+        nt = _norm(title)
+        for i, ptext in enumerate(cleaned_pages):
+            line = next((ln for ln in ptext.split('\n') if nt and _norm(ln).startswith(nt)), None)
+            if line is not None:
+                sections.append((len(sections), line.strip(), i))
+                break
+    return sorted(sections, key=lambda s: s[2])
+
 
 # Pattern for UNNUMBERED section titles: a line with only uppercase text
 # (e.g. "DEFINIZIONI", "RIFERIMENTI") -- max 30 characters to exclude long
@@ -336,8 +394,9 @@ UNNUMBERED_SEC_RE = re.compile(
 )
 
 
-def detect_sections(pages_text: list[str], max_section_num: int = MAX_SECTION_NUM) -> list[tuple[int, str, int]]:
+def _sections_from_patterns(pages_text: list[str], max_section_num: int = MAX_SECTION_NUM) -> list[tuple[int, str, int]]:
     """
+    Fallback when the document has no parseable ToC.
     Scan the text of each page looking for two kinds of heading:
 
     1. Numbered: a line with only '<number> <UPPERCASE TITLE>'.
@@ -548,23 +607,29 @@ if __name__ == '__main__':
     table_pages = sum(1 for p in pages_text if ' | ' in p)
     print(f'   Pages: {len(pages_text)}  |  with tables: {table_pages}')
 
-    print('2. Text cleaning...')
+    print('2. Table of contents...')
+    toc_titles, toc_pages = parse_toc(args.pdf)
+    print(f'   ToC pages: {sorted(toc_pages)}  |  bold chapters: {len(toc_titles)}')
+
+    print('3. Text cleaning...')
     cleaned_pages = clean_content_pages(pages_text)
+    for i in toc_pages:                 # drop the table of contents from the body
+        if i < len(cleaned_pages):
+            cleaned_pages[i] = ''
     print(f'   Total characters: {sum(len(p) for p in cleaned_pages)}')
 
-    print('3. Section detection (on cleaned text)...')
-    sections = detect_sections(cleaned_pages, max_section_num=args.max_sections)
-    print(f'   Sections detected: {len(sections)}')
-    for num, title, pg in sections:
-        print(f'      SEC {num:2d}  page={pg:3d}  "{title[:55]}"')
+    print('4. Section detection...')
+    sections = detect_sections(cleaned_pages, toc_titles, max_section_num=args.max_sections)
+    print(f'   Sections: {len(sections)}  ({"from ToC" if toc_titles else "from patterns"})')
+    for _, title, pg in sections:
+        print(f'      page={pg:3d}  "{title[:55]}"')
 
-    print('4. Corpus construction...')
+    print('5. Corpus construction...')
     corpus = build_corpus(cleaned_pages, sections)
-    print(f'   Kept: {len(corpus)}  |  Discarded: {len(sections) - len(corpus)}')
     for title, body in corpus.items():
         print(f'      OK  "{title[:55]}"  ({len(body.split())} words)')
 
-    print('5. Saving corpus...')
+    print('6. Saving corpus...')
     save_corpus(corpus, args.output)
     print(f'   Saved to: {args.output}')
     print('OK')
