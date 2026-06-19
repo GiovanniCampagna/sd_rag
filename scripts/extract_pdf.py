@@ -24,10 +24,10 @@ Pipeline
    (the entries printed in BOLD; sub-entries are not). The chapters are then
    located in the body. Fallback (no parseable ToC): detect headings by pattern
    (numbered / all-caps). Sections below SECTION_MIN_WORDS are merged into a
-   neighbour.
+   neighbour; sections above SECTION_MAX_WORDS are split to fit the LLM context.
 
-4. Corpus      -- assembles each section between consecutive headings and emits
-   JSON { "TITLE": "text" }.
+4. Corpus      -- assembles each section between consecutive headings, then caps
+   oversized ones, then emits JSON { "TITLE": "text" }.
 
 Generality: no document-specific string is hardcoded; sectioning relies on the
 ToC's own bold styling, which marks chapters in virtually every document.
@@ -58,6 +58,10 @@ SECTION_MIN_WORDS        = 80   # a standalone section needs at least this many 
                                 # smaller (but informative) sections are merged into the
                                 # previous one, so the forge does not produce tiny
                                 # single-fact gold answers (e.g. a 42-word "REGISTRAZIONI").
+SECTION_MAX_WORDS        = 2500 # a section larger than this is split into sub-sections,
+                                # so each one fits the forge/eval context window
+                                # (local models: n_ctx 5000 tok - prompt/output ~= 3500 tok
+                                # ~= 2500 words). Keeps the LLM from truncating the context.
 DOTS_RATIO_MAX           = 0.02
 AVG_WORDS_MIN            = 7.0   # mean words/line -- filters out short lists (acronyms)
 
@@ -570,6 +574,31 @@ def build_corpus(
     return corpus
 
 
+def cap_sections(corpus: dict[str, str], max_words: int = SECTION_MAX_WORDS) -> dict[str, str]:
+    """
+    Split any section longer than max_words into sub-sections of <= max_words, so
+    each one fits the forge/eval context window. The cut is on line boundaries (never
+    mid-line, so table rows stay intact); the parts keep the chapter title, suffixed
+    " (2)", " (3)", ...
+    """
+    out: dict[str, str] = {}
+    for title, text in corpus.items():
+        if len(text.split()) <= max_words:
+            out[title] = text
+            continue
+        part, count, k = [], 0, 1
+        for line in text.split('\n'):
+            w = len(line.split())
+            if count + w > max_words and part:
+                out[title if k == 1 else f'{title} ({k})'] = '\n'.join(part).strip()
+                part, count, k = [], 0, k + 1
+            part.append(line)
+            count += w
+        if part:
+            out[title if k == 1 else f'{title} ({k})'] = '\n'.join(part).strip()
+    return out
+
+
 # ===========================================================================
 # STEP 6: Save
 # ===========================================================================
@@ -625,7 +654,7 @@ if __name__ == '__main__':
         print(f'      page={pg:3d}  "{title[:55]}"')
 
     print('5. Corpus construction...')
-    corpus = build_corpus(cleaned_pages, sections)
+    corpus = cap_sections(build_corpus(cleaned_pages, sections))
     for title, body in corpus.items():
         print(f'      OK  "{title[:55]}"  ({len(body.split())} words)')
 
