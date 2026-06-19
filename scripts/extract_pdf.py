@@ -268,6 +268,15 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
     threshold = max(2, len(pages_text) * RECURRING_PAGE_FRACTION)
     recurring = {s for s, n in line_page_count.items() if n >= threshold}
 
+    # a2) Page-numbered header/footer: the same line up to a varying number, on most
+    # pages (e.g. "... Page 149 of 342"). The exact line is never recurring (the number
+    # differs each page), so count it on the digit-normalized form and remove ALL copies.
+    norm_count: Counter = Counter()
+    for page in pages_text:
+        for s in {re.sub(r'\d+', '#', l.strip()) for l in page.split('\n') if l.strip()}:
+            norm_count[s] += 1
+    numbered_recurring = {s for s, n in norm_count.items() if n >= threshold}
+
     # b) Table headers (lines with '|') that repeat too often
     pipe_count: Counter = Counter()
     for page in pages_text:
@@ -301,6 +310,9 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
                             if lines[j].strip()), '')
                 if not ALLCAPS_RE.match(nxt):
                     continue
+            # a2) Page-numbered footer/header (varying number) -> remove every copy
+            if s not in recurring and re.sub(r'\d+', '#', s) in numbered_recurring:
+                continue
             # b) Repeated table headers -> removed entirely (including the first
             #    occurrence). Must come BEFORE (a): a header recurring in >=50% of
             #    the pages would otherwise be caught by 'recurring' and kept at its
