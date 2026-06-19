@@ -20,17 +20,18 @@ Pipeline
    repeated table headers, isolated page numbers and Figure/Table captions, and
    join continuation lines.
 
-3. Sections    -- primary: read the table of contents and take its CHAPTER titles
-   (the entries printed in BOLD; sub-entries are not). The chapters are then
-   located in the body. Fallback (no parseable ToC): detect headings by pattern
-   (numbered / all-caps). Sections below SECTION_MIN_WORDS are merged into a
-   neighbour; sections above SECTION_MAX_WORDS are split to fit the LLM context.
+3. Sections    -- read the table of contents and take its CHAPTER titles (the
+   entries printed in BOLD; sub-entries are not), then locate them in the body.
+   No parseable ToC -> the whole document is one section. Sections below
+   SECTION_MIN_WORDS are merged into a neighbour; sections above SECTION_MAX_WORDS
+   are split to fit the LLM context.
 
 4. Corpus      -- assembles each section between consecutive headings, then caps
    oversized ones, then emits JSON { "TITLE": "text" }.
 
-Generality: no document-specific string is hardcoded; sectioning relies on the
-ToC's own bold styling, which marks chapters in virtually every document.
+This script targets documents WITH a table of contents (chapters in bold) -- the
+common case for structured PDFs. For monolithic PDFs use extract_pdf_base.
+Generality: no document-specific string is hardcoded.
 """
 
 import re
@@ -52,7 +53,6 @@ VLINE_MIN_SEGMENTS       = 10   # a vertical line repeated >= this many times is
                                 # without mistaking plain prose for a table.
 RECURRING_PAGE_FRACTION  = 0.5
 TABLE_HEADER_MAX_REPEATS = 1
-MAX_SECTION_NUM          = 20
 MIN_WORDS                = 40
 SECTION_MIN_WORDS        = 80   # a standalone section needs at least this many words;
                                 # smaller (but informative) sections are merged into the
@@ -69,15 +69,6 @@ PAGE_NUM_RE   = re.compile(r'^\d{1,3}$')
 CAPTION_RE    = re.compile(r'^(figura|figure|fig\.|tabella)\s+\d', re.IGNORECASE)
 ALLCAPS_RE    = re.compile(r'^[A-ZÀÈÉÌÒÙÄ\s\-–/&]{4,}$')
 SUBSECTION_RE = re.compile(r'^\d+\.\d+')
-
-# Pattern for section headings in the pdfplumber format:
-# a line containing ONLY an integer followed by an uppercase title.
-# E.g. "6    REGISTRAZIONI" or "3  RESPONSABILITÀ ED AZIONI – OPERAZIONI NORMALI"
-# In the table of contents the same lines have "....." or page numbers after the
-# title -> they do not match the pattern -> dedup (last occurrence) discards them.
-SEC_RE = re.compile(
-    r'(?m)^(\d+)[ \t]+([A-ZÀÈÉÌÒÙÄ][A-ZÀÈÉÌÒÙÄ \-–/&]{2,})\s*$'
-)
 
 
 # ===========================================================================
@@ -336,9 +327,9 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
 # ===========================================================================
 # STEP 3: Section detection
 #
-# Primary: read the table of contents and take its CHAPTER titles -- the entries
-# printed in BOLD (sub-entries are not bold). Generic for any document whose ToC
-# marks chapters in bold. Fallback (no parseable ToC): detect headings by pattern.
+# Read the table of contents and take its CHAPTER titles -- the entries printed in
+# BOLD (sub-entries are not bold). Generic for any document whose ToC marks chapters
+# in bold. With no parseable ToC the whole document becomes a single section.
 # ===========================================================================
 
 LEADER_RE       = re.compile(r'^(.+?)[.\s]{2,}\d+\s*$')  # ToC entry: "Title ..... 42"
@@ -380,16 +371,13 @@ def parse_toc(pdf_path: str) -> tuple[list[str], set[int]]:
     return titles, toc_pages
 
 
-def detect_sections(cleaned_pages: list[str], toc_titles: list[str],
-                    max_section_num: int = MAX_SECTION_NUM) -> list[tuple[int, str, int]]:
-    """Section boundaries: from the ToC chapters if available, else by pattern."""
-    if toc_titles:
-        return _sections_from_toc(cleaned_pages, toc_titles)
-    return _sections_from_patterns(cleaned_pages, max_section_num)
-
-
-def _sections_from_toc(cleaned_pages: list[str], toc_titles: list[str]) -> list[tuple[int, str, int]]:
-    """Locate each bold ToC chapter in the body -> (order, body_heading, page_index)."""
+def detect_sections(cleaned_pages: list[str], toc_titles: list[str]) -> list[tuple[int, str, int]]:
+    """
+    Locate each bold ToC chapter in the body -> [(order, body_heading, page_index)].
+    With no parseable ToC this returns [] and the whole document becomes one section
+    (build_corpus), split by length in cap_sections. For monolithic PDFs use
+    extract_pdf_base instead.
+    """
     sections: list[tuple[int, str, int]] = []
     for title in toc_titles:
         nt = _norm(title)
@@ -399,71 +387,6 @@ def _sections_from_toc(cleaned_pages: list[str], toc_titles: list[str]) -> list[
                 sections.append((len(sections), line.strip(), i))
                 break
     return sorted(sections, key=lambda s: s[2])
-
-
-# Pattern for UNNUMBERED section titles: a line with only uppercase text
-# (e.g. "DEFINIZIONI", "RIFERIMENTI") -- max 30 characters to exclude long
-# table headers like "PIAZZOLE DI SOSTA NON ABILITATE...".
-# No ':' or '|' allowed, to exclude inline labels like "NOTA:".
-UNNUMBERED_SEC_RE = re.compile(
-    r'(?m)^([A-ZÀÈÉÌÒÙÄ][A-ZÀÈÉÌÒÙÄ \-–/&]{2,28})\s*$'
-)
-
-
-def _sections_from_patterns(pages_text: list[str], max_section_num: int = MAX_SECTION_NUM) -> list[tuple[int, str, int]]:
-    """
-    Fallback when the document has no parseable ToC.
-    Scan the text of each page looking for two kinds of heading:
-
-    1. Numbered: a line with only '<number> <UPPERCASE TITLE>'.
-       E.g. "3  RESPONSABILITÀ ED AZIONI – OPERAZIONI NORMALI"
-
-    2. Unnumbered: a line with only uppercase text (max 30 chars).
-       E.g. "DEFINIZIONI", "RIFERIMENTI".
-       Lets us extract sections that have no number but are rich in content
-       useful for the RAG, such as the definitions of key terms.
-
-    In both cases it keeps the last occurrence (body > table of contents):
-    in the ToC the titles appear with "....." or page numbers after them, so
-    they do NOT match the patterns and are not captured there -- only the
-    occurrence in the document body is captured.
-
-    Sections without enough content (INDICE, acronyms, etc.) are then discarded
-    by is_informative.
-
-    Returns [(number, title, page_index)] sorted by page. Unnumbered titles get a
-    conventional number (1000+page) for ordering only, not visible in the final corpus.
-    """
-    numbered:   dict[int, tuple[int, str, int]] = {}
-    unnumbered: dict[str, tuple[int, str, int]] = {}
-
-    for page_idx, page_text in enumerate(pages_text):
-
-        # Numbered sections
-        for m in SEC_RE.finditer(page_text):
-            num   = int(m.group(1))
-            title = m.group(2).strip()
-            if num > max_section_num or len(title) < 3:
-                continue
-            numbered[num] = (num, title, page_idx)
-
-        # Unnumbered sections
-        for m in UNNUMBERED_SEC_RE.finditer(page_text):
-            title = m.group(1).strip()
-            if len(title) < 4:
-                continue
-            # Skip table column-headers: an all-caps line immediately followed by a
-            # table row (pipe) is a header inside a table, not a section title
-            # (e.g. "ATC FIS" above a phraseology table).
-            next_line = page_text[m.end():].lstrip('\n').split('\n', 1)[0]
-            if ' | ' in next_line:
-                continue
-            # Last occurrence wins (the first is in the ToC with ".....", which
-            # does not match the pattern -- so here we are already in the body)
-            unnumbered[title] = (1000 + page_idx, title, page_idx)
-
-    combined = list(numbered.values()) + list(unnumbered.values())
-    return sorted(combined, key=lambda x: x[2])
 
 
 # ===========================================================================
@@ -511,7 +434,14 @@ def build_corpus(
     - whole intermediate pages
     - tail: text before the next title on the same sheet
     Final cleanup: trailing numbers and bleed from adjacent short sections.
+
+    No sections (no parseable ToC): the whole document is a single section, which
+    cap_sections then splits by length.
     """
+    if not sections:
+        text = '\n'.join(p for p in cleaned_pages if p.strip()).strip()
+        return {'document': text} if text else {}
+
     corpus: dict[str, str] = {}
     last_title: str | None = None
     pending:    str = ''   # leading small section(s) to fold into the NEXT section
@@ -638,10 +568,6 @@ if __name__ == '__main__':
     )
     parser.add_argument('pdf', help='Path of the PDF file to process')
     parser.add_argument('output', help='Path of the output JSON file')
-    parser.add_argument(
-        '--max-sections', type=int, default=MAX_SECTION_NUM,
-        help=f'Maximum top-level section number (default: {MAX_SECTION_NUM})'
-    )
     args = parser.parse_args()
 
     print('1. Text extraction...')
@@ -661,8 +587,8 @@ if __name__ == '__main__':
     print(f'   Total characters: {sum(len(p) for p in cleaned_pages)}')
 
     print('4. Section detection...')
-    sections = detect_sections(cleaned_pages, toc_titles, max_section_num=args.max_sections)
-    print(f'   Sections: {len(sections)}  ({"from ToC" if toc_titles else "from patterns"})')
+    sections = detect_sections(cleaned_pages, toc_titles)
+    print(f'   Sections: {len(sections)}  ({"from ToC" if toc_titles else "whole document"})')
     for _, title, pg in sections:
         print(f'      page={pg:3d}  "{title[:55]}"')
 
