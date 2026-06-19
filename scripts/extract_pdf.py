@@ -56,6 +56,10 @@ RECURRING_PAGE_FRACTION  = 0.5
 TABLE_HEADER_MAX_REPEATS = 1
 MAX_SECTION_NUM          = 20
 MIN_WORDS                = 40
+SECTION_MIN_WORDS        = 80   # a standalone section needs at least this many words;
+                                # smaller (but informative) sections are merged into the
+                                # previous one, so the forge does not produce tiny
+                                # single-fact gold answers (e.g. a 42-word "REGISTRAZIONI").
 DOTS_RATIO_MAX           = 0.02
 AVG_WORDS_MIN            = 7.0   # mean words/line -- filters out short lists (acronyms)
 
@@ -386,6 +390,8 @@ def build_corpus(
     Final cleanup: trailing numbers and bleed from adjacent short sections.
     """
     corpus: dict[str, str] = {}
+    last_title: str | None = None
+    pending:    str = ''   # leading small section(s) to fold into the NEXT section
     total  = len(cleaned_pages)
 
     for i, (_, title, start_page) in enumerate(sections):
@@ -429,8 +435,29 @@ def build_corpus(
         # catches the remaining cases.
         section_text = _join_continuations(section_text)
 
-        if is_informative(section_text):
-            corpus[title] = section_text
+        if not is_informative(section_text):
+            continue   # genuine non-content (TOC bleed, dots-heavy): drop as before
+
+        if len(section_text.split()) < SECTION_MIN_WORDS:
+            # Real content, but too small to stand alone: fold it into a neighbour so it
+            # is not lost and does not become a tiny single-fact gold for the forge. Its
+            # heading stays inline as a sub-heading.
+            if last_title is not None:
+                # merge BACKWARD into the previous section
+                corpus[last_title] = (corpus[last_title] + '\n\n' + section_text).strip()
+            else:
+                # nothing before yet: defer to merge FORWARD into the next section
+                pending = (pending + '\n\n' + section_text).strip() if pending else section_text
+            continue
+
+        if pending:                     # flush deferred leading small section(s) into this one
+            section_text = (pending + '\n\n' + section_text).strip()
+            pending = ''
+        corpus[title] = section_text
+        last_title    = title
+
+    if pending:                         # whole document was only small sections: keep them as one
+        corpus[sections[0][1]] = pending
 
     return corpus
 
