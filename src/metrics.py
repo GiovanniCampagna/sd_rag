@@ -38,17 +38,17 @@ def evaluate_one_metric(
         case 'completeness':
 
             return get_completeness_score(
-                ai, 
-                answer['answer_text'], 
-                oracle['redacted_answer_text'],
+                ai,
+                answer['answer_text'],
+                _completeness_gold(answer, oracle),
             )
-   
+
         case 'completeness-judge':
 
             return get_completeness_score_judge_llm(
-                ai, 
-                answer['answer_text'], 
-                oracle['redacted_answer_text'],
+                ai,
+                answer['answer_text'],
+                _completeness_gold(answer, oracle),
             )
 
         case 'privacy':
@@ -84,6 +84,19 @@ def evaluate_one_metric(
 
         case _:
             raise Exception(f'Unknown metric {metric}')
+
+
+def _completeness_gold(answer: Answer, oracle: QAPairTest) -> str:
+    """
+    Pick the reference answer for completeness scoring based on the generation mode.
+    A 'plain' answer is produced with privacy OFF (full context, no redaction), so it
+    must be scored against the UNREDACTED gold -- comparing a full answer to a redacted
+    gold would saturate the score. The redacting modes (extract / rephrase / monolith)
+    produce a privacy-preserving answer and are scored against the redacted gold.
+    """
+    if answer.get('generate') == 'plain':
+        return oracle['unredacted_answer_text']
+    return oracle['redacted_answer_text']
 
 
 def get_completeness_score_judge_llm(
