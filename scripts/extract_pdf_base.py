@@ -29,8 +29,8 @@ if __name__ == '__main__':
     parser.add_argument('pdf', help='Path of the PDF file to process')
     parser.add_argument('output', help='Path of the output JSON file')
     parser.add_argument(
-        '--key', default='documento_prof',
-        help='Corpus key under which to save the text (default: documento_prof)'
+        '--key', default='documento',
+        help='Corpus key under which to save the text (default: documento)'
     )
     args = parser.parse_args()
 
