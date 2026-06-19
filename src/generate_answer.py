@@ -20,10 +20,10 @@ def generate_answer(
         query=query,
     )
 
-    # La risposta richiesta e' "one single short sentence": bastano pochi token.
-    # NB: impostare max_tokens = count_tokens(context) faceva sforare il context
-    # window dei modelli locali (prompt_tokens + max_tokens > n_ctx). Gemini
-    # ignora max_tokens, quindi il problema emergeva solo con llama.cpp.
+    # The requested answer is "one single short sentence": a few tokens are enough.
+    # NB: setting max_tokens = count_tokens(context) overflowed the context window
+    # of local models (prompt_tokens + max_tokens > n_ctx). Gemini ignores
+    # max_tokens, so the problem only showed up with llama.cpp.
     answer = ai.g.generate(
         prompt,
         max_tokens=256,
