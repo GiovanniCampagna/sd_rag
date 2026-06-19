@@ -43,7 +43,17 @@ def validate_one(typed_dict: Type[T]):
 
         if not isinstance(data, dict):
             return None
-        
+
+        # The validator treats an int as NOT a float (library quirk). An LLM judge that
+        # must return a float in [0, 1] often emits the bare integers 0 or 1 instead of
+        # 0.0 / 1.0, which fails validation and forces a retry. Coerce ONLY these edge
+        # values for float-typed fields; a genuinely malformed integer (e.g. 50) still
+        # fails and retries as before. (type(value) is int excludes bool.)
+        for key, expected in getattr(typed_dict, '__annotations__', {}).items():
+            value = data.get(key)
+            if expected is float and type(value) is int and value in (0, 1):
+                data[key] = float(value)
+
         try:
             if validate_typeddict(data, typed_dict, silent=False):
                 return data
@@ -51,10 +61,6 @@ def validate_one(typed_dict: Type[T]):
             return None
         except DictValueTypeMismatchException:
             return None
-            # Note that: library has a "problem", int is not considered instance of float.
-            # TODO: this is a tmp fix, if there is more than one problem it will not work!
-            # if e.expected == float and e.actual == int:
-            #     return data # pyright:ignore
 
         return None
     
