@@ -443,8 +443,7 @@ def _sections_from_patterns(pages_text: list[str], max_section_num: int = MAX_SE
             # Skip table column-headers: an all-caps line immediately followed by a
             # table row (pipe) is a header inside a table, not a section title
             # (e.g. "ATC FIS" above a phraseology table).
-            after = page_text[m.end():].lstrip('\n')
-            next_line = after.split('\n', 1)[0] if after else ''
+            next_line = page_text[m.end():].lstrip('\n').split('\n', 1)[0]
             if ' | ' in next_line:
                 continue
             # Last occurrence wins (the first is in the ToC with ".....", which
@@ -586,16 +585,18 @@ def cap_sections(corpus: dict[str, str], max_words: int = SECTION_MAX_WORDS) -> 
         if len(text.split()) <= max_words:
             out[title] = text
             continue
-        part, count, k = [], 0, 1
+        pieces, part, count = [], [], 0
         for line in text.split('\n'):
             w = len(line.split())
             if count + w > max_words and part:
-                out[title if k == 1 else f'{title} ({k})'] = '\n'.join(part).strip()
-                part, count, k = [], 0, k + 1
+                pieces.append('\n'.join(part).strip())
+                part, count = [], 0
             part.append(line)
             count += w
         if part:
-            out[title if k == 1 else f'{title} ({k})'] = '\n'.join(part).strip()
+            pieces.append('\n'.join(part).strip())
+        for k, piece in enumerate(pieces, start=1):
+            out[title if k == 1 else f'{title} ({k})'] = piece
     return out
 
 
