@@ -52,6 +52,10 @@ import pdfplumber
 # ===========================================================================
 
 TABLE_MIN_COLS           = 2
+VLINE_MIN_SEGMENTS       = 10   # a vertical line repeated >= this many times is a real
+                                # column separator: lets us read tables whose rows are
+                                # separated by whitespace instead of horizontal rules,
+                                # without mistaking plain prose for a table.
 RECURRING_PAGE_FRACTION  = 0.5
 TABLE_HEADER_MAX_REPEATS = 1
 MAX_SECTION_NUM          = 20
@@ -136,6 +140,40 @@ def _not_in_bbox(obj: dict, bboxes: list[tuple]) -> bool:
     return True
 
 
+def _extract_spaced_table(page) -> list[tuple]:
+    """
+    Fallback for tables whose COLUMNS are ruled (vertical lines) but whose ROWS are
+    separated by whitespace instead of horizontal lines: find_tables() needs a grid and
+    misses them. Columns are rebuilt from the vertical lines that repeat down the page
+    (>= VLINE_MIN_SEGMENTS times) and rows from the text layout -- the same process as a
+    ruled table, with whitespace in place of horizontal rules. Rows outside the vertical
+    lines' span (running header / page number) are dropped.
+
+    Returns [(bbox, data), ...], or [] if the page has no such ruled-column table -- so
+    plain narrative pages, which lack these repeated column lines, are left untouched.
+    """
+    xcount = Counter(round(e['x0']) for e in page.vertical_edges)
+    col_x = sorted(x for x, n in xcount.items() if n >= VLINE_MIN_SEGMENTS)
+    if len(col_x) < 2:
+        return []
+
+    ys = [e[k] for e in page.vertical_edges
+          if round(e['x0']) in col_x for k in ('top', 'bottom')]
+    top, bottom = min(ys), max(ys)
+    lines_x = sorted({round(page.bbox[0]) + 5, *col_x, round(page.bbox[2]) - 5})
+
+    out: list[tuple] = []
+    for t in page.find_tables(table_settings={
+            'vertical_strategy': 'explicit', 'explicit_vertical_lines': lines_x,
+            'horizontal_strategy': 'text', 'explicit_horizontal_lines': [top, bottom]}):
+        # Keep only the rows inside the column-lines region (drops header/footer bleed)
+        data = [cells for row, cells in zip(t.rows, t.extract())
+                if top - 2 <= row.bbox[1] <= bottom + 2]
+        if data and data[0] and len(data[0]) >= TABLE_MIN_COLS:
+            out.append(((t.bbox[0], top, t.bbox[2], bottom), data))
+    return out
+
+
 def extract_pages_text(pdf_path: str) -> list[str]:
     """
     Return one text string per PDF page.
@@ -156,6 +194,10 @@ def extract_pages_text(pdf_path: str) -> list[str]:
                 data = t.extract()
                 if data and data[0] and len(data[0]) >= TABLE_MIN_COLS:
                     valid.append((t.bbox, data))
+
+            if not valid:
+                # No ruled grid: maybe a table with ruled columns but whitespace rows.
+                valid = _extract_spaced_table(page)
 
             if not valid:
                 pages_text.append(page.extract_text() or '')
@@ -334,6 +376,13 @@ def detect_sections(pages_text: list[str], max_section_num: int = MAX_SECTION_NU
         for m in UNNUMBERED_SEC_RE.finditer(page_text):
             title = m.group(1).strip()
             if len(title) < 4:
+                continue
+            # Skip table column-headers: an all-caps line immediately followed by a
+            # table row (pipe) is a header inside a table, not a section title
+            # (e.g. "ATC FIS" above a phraseology table).
+            after = page_text[m.end():].lstrip('\n')
+            next_line = after.split('\n', 1)[0] if after else ''
+            if ' | ' in next_line:
                 continue
             # Last occurrence wins (the first is in the ToC with ".....", which
             # does not match the pattern -- so here we are already in the body)
