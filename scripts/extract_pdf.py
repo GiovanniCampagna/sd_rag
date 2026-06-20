@@ -134,9 +134,10 @@ def _extract_spaced_table(page) -> list[tuple]:
     Fallback for tables whose COLUMNS are ruled (vertical lines) but whose ROWS are
     separated by whitespace instead of horizontal lines: find_tables() needs a grid and
     misses them. Columns are rebuilt from the vertical lines that repeat down the page
-    (>= VLINE_MIN_SEGMENTS times) and rows from the text layout -- the same process as a
-    ruled table, with whitespace in place of horizontal rules. Rows outside the vertical
-    lines' span (running header / page number) are dropped.
+    (>= VLINE_MIN_SEGMENTS times). Rows are taken from the horizontal rules present in
+    the region (the boxes drawn around the cells, common in phraseology tables); only
+    if there are too few, rows are detected from the text layout. Rows outside the
+    vertical lines' span (running header / page number) are dropped.
 
     Returns [(bbox, data), ...], or [] if the page has no such ruled-column table -- so
     plain narrative pages, which lack these repeated column lines, are left untouched.
@@ -151,13 +152,23 @@ def _extract_spaced_table(page) -> list[tuple]:
     top, bottom = min(ys), max(ys)
     lines_x = sorted({round(page.bbox[0]) + 5, *col_x, round(page.bbox[2]) - 5})
 
+    # Row boundaries from the horizontal rules inside the region (the cell boxes); with
+    # enough of them, rows align to the cells (so a row's left description stays with its
+    # right phraseology). Otherwise fall back to detecting rows from the text.
+    rules = sorted({round(e['top']) for e in page.horizontal_edges
+                    if top - 2 <= round(e['top']) <= bottom + 2})
+    if len(rules) >= 3:
+        hstrat = {'horizontal_strategy': 'explicit',
+                  'explicit_horizontal_lines': sorted({round(top), *rules, round(bottom)})}
+    else:
+        hstrat = {'horizontal_strategy': 'text', 'explicit_horizontal_lines': [top, bottom]}
+
     out: list[tuple] = []
     for t in page.find_tables(table_settings={
-            'vertical_strategy': 'explicit', 'explicit_vertical_lines': lines_x,
-            'horizontal_strategy': 'text', 'explicit_horizontal_lines': [top, bottom]}):
+            'vertical_strategy': 'explicit', 'explicit_vertical_lines': lines_x, **hstrat}):
         # Keep only the rows inside the column-lines region (drops header/footer bleed)
         data = [cells for row, cells in zip(t.rows, t.extract())
-                if top - 2 <= row.bbox[1] <= bottom + 2]
+                if top - 2 <= row.bbox[1] <= bottom + 2 and any(c and c.strip() for c in cells)]
         if data and data[0] and len(data[0]) >= TABLE_MIN_COLS:
             out.append(((t.bbox[0], top, t.bbox[2], bottom), data))
     return out
