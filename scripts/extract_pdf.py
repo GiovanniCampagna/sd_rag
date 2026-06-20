@@ -177,20 +177,43 @@ def _extract_spaced_table(page) -> list[tuple]:
     return out
 
 
+def _template_band(pages) -> tuple[float, float]:
+    """
+    Body band (top, bottom): the area between the header/footer separator rules. These
+    rules are part of the page template, so they recur at the same y across most pages;
+    everything above the topmost / below the bottommost is header/footer and is dropped.
+    A real section heading sits below the header rule, so it survives. Returns
+    (0, page_height) if no recurring separator rule is found.
+    """
+    yc: Counter = Counter()
+    for page in pages:
+        for y in {round(e['top']) for e in page.horizontal_edges
+                  if (e['x1'] - e['x0']) > page.width * 0.3}:
+            yc[y] += 1
+    threshold = max(2, len(pages) * RECURRING_PAGE_FRACTION)
+    template = [y for y, n in yc.items() if n >= threshold]
+    height = pages[0].height
+    header = max((y for y in template if y < height * 0.25), default=0)
+    footer = min((y for y in template if y > height * 0.75), default=height)
+    return header, footer
+
+
 def extract_pages_text(pdf_path: str) -> list[str]:
     """
     Return one text string per PDF page.
 
-    Pages without tables: page.extract_text() directly.
-    Pages with tables: narrative lines (excluding the characters inside the bboxes)
-    and tabular blocks are collected with their vertical coordinate (top) and sorted
-    by position, so the reading order stays correct even when a table and text
-    coexist on the same page.
+    Each page is first cropped to its body band (header/footer stripped, see
+    _template_band). Pages without tables: page.extract_text() directly. Pages with
+    tables: narrative lines (excluding the characters inside the bboxes) and tabular
+    blocks are collected with their vertical coordinate (top) and sorted by position, so
+    the reading order stays correct even when a table and text coexist on the same page.
     """
     pages_text: list[str] = []
 
     with pdfplumber.open(pdf_path) as pdf:
+        header_y, footer_y = _template_band(pdf.pages)
         for page in pdf.pages:
+            page = page.crop((0, header_y, page.width, footer_y))
             # Find valid tables and pre-load the data
             valid: list[tuple] = []
             for t in page.find_tables():
@@ -294,7 +317,6 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
 
     UNICODE_JUNK_RE = re.compile(r'[\uf000-\uf8ff]')
 
-    seen_recurring: set[str] = set()
     cleaned: list[str] = []
 
     for page in pages_text:
@@ -324,11 +346,9 @@ def clean_content_pages(pages_text: list[str]) -> list[str]:
             #    first copy. Data rows are not repeated -> safe.
             if s in repeated_headers:
                 continue
-            # a) Recurring non-tabular lines (page header/footer) -> keep the first
+            # a) Recurring lines (running header/footer) -> remove every copy. A real
+            #    section heading appears once, so it is NOT recurring and survives.
             if s in recurring:
-                if s not in seen_recurring:
-                    page_out.append(line)
-                    seen_recurring.add(s)
                 continue
             page_out.append(line)
 
@@ -396,11 +416,20 @@ def detect_sections(cleaned_pages: list[str], toc_titles: list[str]) -> list[tup
     for title in toc_titles:
         nt = _norm(title)
         for i, ptext in enumerate(cleaned_pages):
-            line = next((ln for ln in ptext.split('\n') if nt and _norm(ln).startswith(nt)), None)
+            line = next((ln for ln in ptext.split('\n') if _heading_match(_norm(ln), nt)), None)
             if line is not None:
                 sections.append((len(sections), line.strip(), i))
                 break
     return sorted(sections, key=lambda s: s[2])
+
+
+def _heading_match(line: str, title: str) -> bool:
+    """
+    True if `line` is the body heading of ToC entry `title` (both already normalised):
+    either the line carries the whole title, or (for a heading wrapped across lines) the
+    line is a long-enough prefix of the title.
+    """
+    return line.startswith(title) or (len(line) >= 12 and title.startswith(line))
 
 
 # ===========================================================================
