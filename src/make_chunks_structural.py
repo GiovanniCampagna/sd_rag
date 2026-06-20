@@ -22,6 +22,8 @@ def _detect_sections(text: str) -> List[Tuple[int, str, str, int]]:
     seen: set = set()
 
     for m in _NUMBERED_HEADING_RE.finditer(text):
+        if ' | ' in m.group(0):
+            continue                      # table row ("1.1.1 ... | ..."), not a heading
         label, heading = m.group(1), m.group(2).strip()
         found.append((m.start(), label, heading, _heading_level(label)))
         seen.add(m.start())
