@@ -152,12 +152,15 @@ def _extract_spaced_table(page) -> list[tuple]:
     top, bottom = min(ys), max(ys)
     lines_x = sorted({round(page.bbox[0]) + 5, *col_x, round(page.bbox[2]) - 5})
 
-    # Row boundaries from the horizontal rules inside the region (the cell boxes); with
-    # enough of them, rows align to the cells (so a row's left description stays with its
-    # right phraseology). Otherwise fall back to detecting rows from the text.
+    # Row boundaries from the WIDE horizontal rules inside the region (the boxes around
+    # the cells); ignore tiny rules like the ATC/FIS checkbox squares, which would split
+    # a logical row line by line. With enough boxes, rows align to the cells (a row's left
+    # description stays with its right phraseology); otherwise rows come from the text.
+    min_rule_w = (page.bbox[2] - page.bbox[0]) * 0.1
     rules = sorted({round(e['top']) for e in page.horizontal_edges
-                    if top - 2 <= round(e['top']) <= bottom + 2})
-    if len(rules) >= 3:
+                    if top - 2 <= round(e['top']) <= bottom + 2
+                    and (e['x1'] - e['x0']) >= min_rule_w})
+    if len(rules) >= 2:
         hstrat = {'horizontal_strategy': 'explicit',
                   'explicit_horizontal_lines': sorted({round(top), *rules, round(bottom)})}
     else:
