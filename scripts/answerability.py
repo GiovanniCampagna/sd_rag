@@ -3,17 +3,16 @@ Tier 2 — Answerability a rango (top-k). Sostituisce il vecchio coverage@budget
 
 Perche' non il budget di token: riempire un budget con PIU' chunk lascia che i metodi
 deboli compensino (tanti chunk piccoli "coprono" quanto un buon chunk solo), e la
-copertura semantica soft satura (nomic da' coseno ~0.6-0.8 anche fuori bersaglio). Non
-misura quindi la QUALITA' del chunk, ma la recall su molti chunk.
+copertura semantica "soft" (max-coseno medio) satura — nomic da' coseno ~0.6-0.8 anche
+fuori bersaglio. Non misura la QUALITA' del chunk, ma la recall su molti chunk. (Per lo
+stesso motivo NON si riporta una cov@1: sarebbe la stessa misura satura, ristretta al
+top-1, e premia i frammenti piccoli e super-aderenti alla query.)
 
-Qui si guarda chi mette l'informazione COMPLETA in un singolo chunk ben rankato, con
-metriche parametro-free (niente soglia, niente budget):
-
-  - valori@k : % di domande (con valori puntuali) i cui valori distintivi della gold sono
-               TUTTI nei primi k chunk per coseno con la query. k=1 = "becca subito".
+Metriche, parametro-free (niente soglia, niente budget), sui valori puntuali:
+  - valori@k : % di domande i cui valori distintivi della gold sono TUTTI nei primi k
+               chunk per coseno con la query. k=1 = "becca subito".
   - MRR      : media di 1/(rango del primo chunk che completa i valori).
-  - cov@1    : copertura semantica della gold col SOLO top-1 chunk (max-coseno medio).
-  - tok_top1, tok/chunk : costo in token (per leggere il risultato come fedelta'/token).
+Accanto, la dimensione/costo: parole/chunk, token/chunk, n. chunk.
 
 Uso:
   env/Scripts/python.exe scripts/answerability.py --testset datasets/testset.json \
@@ -26,7 +25,7 @@ import numpy as np
 from ai import AI
 from make_chunks import make_chunks
 from make_chunks_semantic import make_chunks_semantic
-from make_chunks_structural import make_chunks_structural, _split_sentences
+from make_chunks_structural import make_chunks_structural
 from make_chunks_structural_semantic import make_chunks_structural_semantic
 from make_chunks_adaptive import make_chunks_adaptive
 
@@ -48,11 +47,6 @@ def _norm(v): return re.sub(r'[^0-9A-Za-z]', '', v).upper()
 def gold_values(text):
     return {_norm(v) for v in _VAL.findall(text) if len(_norm(v)) >= 4}
 
-def cosine_matrix(A, B):
-    A = A / (np.linalg.norm(A, axis=1, keepdims=True) + 1e-9)
-    B = B / (np.linalg.norm(B, axis=1, keepdims=True) + 1e-9)
-    return A @ B.T
-
 mean = lambda L: (sum(L) / len(L)) if L else 0.0
 
 
@@ -68,8 +62,7 @@ def main():
 
     vhit = {m: {k: [] for k in KS} for m in METHODS}
     mrr = {m: [] for m in METHODS}
-    cov1 = {m: [] for m in METHODS}
-    tok1 = {m: [] for m in METHODS}
+    chunkw = {m: [] for m in METHODS}
     chunktok = {m: [] for m in METHODS}
     nchunks = {m: [] for m in METHODS}
     nvq = 0
@@ -81,76 +74,66 @@ def main():
             if not chunks:
                 continue
             nchunks[m].append(len(chunks))
-            ctok = [ai.e.count_tokens(c) for c in chunks]
-            chunktok[m].extend(ctok)
+            chunkw[m].extend(len(c.split()) for c in chunks)
+            chunktok[m].extend(ai.e.count_tokens(c) for c in chunks)
             cnorm = [_norm(c) for c in chunks]
             cemb = ai.e.embed(chunks)
 
             for qa in tc['qa_pairs']:
                 gold = qa['unredacted_answer_text']
+                gvals = {v for v in gold_values(gold) if v in _norm(text)}
+                if not gvals:
+                    continue
+                if m == list(METHODS)[0]:
+                    nvq += 1
                 q_emb = ai.e.embed(qa['redacted_question_text'])[0]
                 sims = (cemb / (np.linalg.norm(cemb, axis=1, keepdims=True) + 1e-9)) @ \
                        (q_emb / (np.linalg.norm(q_emb) + 1e-9))
                 order = list(np.argsort(-sims))
-                tok1[m].append(ctok[order[0]])
 
-                # answerability sui valori puntuali
-                gvals = {v for v in gold_values(gold) if v in _norm(text)}
-                if gvals:
-                    if m == list(METHODS)[0]:
-                        nvq += 1
-                    seen, rank = set(), 0
-                    for k_i, idx in enumerate(order, 1):
-                        seen |= {v for v in gvals if v in cnorm[idx]}
-                        if seen == gvals:
-                            rank = k_i
-                            break
-                    mrr[m].append(1.0 / rank if rank else 0.0)
-                    for k in KS:
-                        vhit[m][k].append(1.0 if (rank and rank <= k) else 0.0)
-
-                # copertura del solo top-1 (tutte le query)
-                gs = _split_sentences(gold)
-                if gs:
-                    gemb = ai.e.embed(gs)
-                    cs = _split_sentences(chunks[order[0]])
-                    if cs:
-                        cov1[m].append(float(cosine_matrix(gemb, ai.e.embed(cs)).max(axis=1).mean()))
+                seen, rank = set(), 0
+                for k_i, idx in enumerate(order, 1):
+                    seen |= {v for v in gvals if v in cnorm[idx]}
+                    if seen == gvals:
+                        rank = k_i
+                        break
+                mrr[m].append(1.0 / rank if rank else 0.0)
+                for k in KS:
+                    vhit[m][k].append(1.0 if (rank and rank <= k) else 0.0)
 
     # ---- report ----
     nq = sum(len(tc['qa_pairs']) for tc in testset)
     print(f'\nTestset: {args.testset} — {nq} query (con valori puntuali: {nvq})\n')
-    hdr = (f'{"metodo":11} {"n.chunk":>7} {"tok/chunk":>9} {"tok top-1":>9}  '
-           f'{"valori@1":>8} {"valori@2":>8} {"valori@3":>8} {"MRR":>5}  {"cov@1":>6}')
+    hdr = (f'{"metodo":11} {"n.chunk":>7} {"parole/chunk":>12} {"token/chunk":>11}  '
+           f'{"val@1":>6} {"val@2":>6} {"val@3":>6} {"MRR":>5}')
     print(hdr); print('-' * len(hdr))
     for m in METHODS:
-        print(f'{m:11} {mean(nchunks[m]):>7.1f} {mean(chunktok[m]):>9.1f} {mean(tok1[m]):>9.1f}  '
-              f'{mean(vhit[m][1]):>8.3f} {mean(vhit[m][2]):>8.3f} {mean(vhit[m][3]):>8.3f} '
-              f'{mean(mrr[m]):>5.3f}  {mean(cov1[m]):>6.3f}')
-    print('\nvalori@k = % domande con TUTTI i valori della risposta nei primi k chunk (k=1 = subito).')
-    print('MRR = media di 1/rango del 1° chunk completo. cov@1 = copertura della gold col solo top-1.')
+        print(f'{m:11} {mean(nchunks[m]):>7.1f} {mean(chunkw[m]):>12.0f} {mean(chunktok[m]):>11.0f}  '
+              f'{mean(vhit[m][1]):>6.3f} {mean(vhit[m][2]):>6.3f} {mean(vhit[m][3]):>6.3f} {mean(mrr[m]):>5.3f}')
+    print('\nval@k = % domande con TUTTI i valori della risposta nei primi k chunk recuperati (k=1 = subito).')
+    print('MRR = media di 1/rango del 1° chunk che completa i valori. parole/token-per-chunk = dimensione media.')
 
     # ---- save ----
     out = {}
     for m in METHODS:
         out[m] = {
             'n_chunks': round(mean(nchunks[m]), 1),
+            'words_per_chunk': round(mean(chunkw[m]), 1),
             'tok_per_chunk': round(mean(chunktok[m]), 1),
-            'tok_top1': round(mean(tok1[m]), 1),
             'valori_at': {str(k): round(mean(vhit[m][k]), 3) for k in KS},
             'mrr': round(mean(mrr[m]), 3),
-            'cov_top1': round(mean(cov1[m]), 3),
         }
     lines = ['# Tier 2 — Answerability a rango (top-k)',
              f'Testset: `{args.testset}` — {nq} query (con valori puntuali: {nvq}).', '',
-             '| metodo | n.chunk | tok/chunk | tok top-1 | valori@1 | valori@2 | valori@3 | MRR | cov@1 |',
-             '|---|---|---|---|---|---|---|---|---|']
+             '| metodo | n° chunk | parole/chunk | token/chunk | valori nel 1° | valori nei primi 2 | valori nei primi 3 | MRR |',
+             '|---|---|---|---|---|---|---|---|']
     for m, dct in out.items():
-        lines.append(f"| {m} | {dct['n_chunks']:.1f} | {dct['tok_per_chunk']:.0f} | {dct['tok_top1']:.0f} | "
+        lines.append(f"| {m} | {dct['n_chunks']:.1f} | {dct['words_per_chunk']:.0f} | {dct['tok_per_chunk']:.0f} | "
                      f"{dct['valori_at']['1']:.3f} | {dct['valori_at']['2']:.3f} | {dct['valori_at']['3']:.3f} | "
-                     f"{dct['mrr']:.3f} | {dct['cov_top1']:.3f} |")
-    lines += ['', '_valori@k = % domande con tutti i valori della risposta nei primi k chunk recuperati. '
-              'MRR = media di 1/rango del 1° chunk completo. cov@1 = copertura della gold col solo top-1._']
+                     f"{dct['mrr']:.3f} |")
+    lines += ['', '_valori nel 1°/nei primi k = % domande con tutti i valori distintivi della risposta nei primi '
+              'k chunk recuperati per coseno con la query. MRR = media di 1/rango del 1° chunk che li completa. '
+              'parole/token-per-chunk = dimensione media del chunk (costo del contesto)._']
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
     with open(args.out, 'w', encoding='utf-8') as f:
         json.dump({'metric': 'tier2_answerability', 'testset': args.testset,
