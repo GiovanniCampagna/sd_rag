@@ -11,7 +11,6 @@ top-1, e premia i frammenti piccoli e super-aderenti alla query.)
 Metriche, parametro-free (niente soglia, niente budget), sui valori puntuali:
   - valori@k : % di domande i cui valori distintivi della gold sono TUTTI nei primi k
                chunk per coseno con la query. k=1 = "becca subito".
-  - MRR      : media di 1/(rango del primo chunk che completa i valori).
 Accanto, la dimensione/costo: parole/chunk, token/chunk, n. chunk.
 
 Uso:
@@ -61,7 +60,6 @@ def main():
     testset = json.load(open(args.testset, encoding='utf-8'))
 
     vhit = {m: {k: [] for k in KS} for m in METHODS}
-    mrr = {m: [] for m in METHODS}
     chunkw = {m: [] for m in METHODS}
     chunktok = {m: [] for m in METHODS}
     nchunks = {m: [] for m in METHODS}
@@ -97,7 +95,6 @@ def main():
                     if seen == gvals:
                         rank = k_i
                         break
-                mrr[m].append(1.0 / rank if rank else 0.0)
                 for k in KS:
                     vhit[m][k].append(1.0 if (rank and rank <= k) else 0.0)
 
@@ -105,13 +102,13 @@ def main():
     nq = sum(len(tc['qa_pairs']) for tc in testset)
     print(f'\nTestset: {args.testset} — {nq} query (con valori puntuali: {nvq})\n')
     hdr = (f'{"metodo":11} {"n.chunk":>7} {"parole/chunk":>12} {"token/chunk":>11}  '
-           f'{"val@1":>6} {"val@2":>6} {"val@3":>6} {"MRR":>5}')
+           f'{"val@1":>6} {"val@2":>6} {"val@3":>6}')
     print(hdr); print('-' * len(hdr))
     for m in METHODS:
         print(f'{m:11} {mean(nchunks[m]):>7.1f} {mean(chunkw[m]):>12.0f} {mean(chunktok[m]):>11.0f}  '
-              f'{mean(vhit[m][1]):>6.3f} {mean(vhit[m][2]):>6.3f} {mean(vhit[m][3]):>6.3f} {mean(mrr[m]):>5.3f}')
+              f'{mean(vhit[m][1]):>6.3f} {mean(vhit[m][2]):>6.3f} {mean(vhit[m][3]):>6.3f}')
     print('\nval@k = % domande con TUTTI i valori della risposta nei primi k chunk recuperati (k=1 = subito).')
-    print('MRR = media di 1/rango del 1° chunk che completa i valori. parole/token-per-chunk = dimensione media.')
+    print('parole/token-per-chunk = dimensione media del chunk (costo del contesto).')
 
     # ---- save ----
     out = {}
@@ -121,19 +118,17 @@ def main():
             'words_per_chunk': round(mean(chunkw[m]), 1),
             'tok_per_chunk': round(mean(chunktok[m]), 1),
             'valori_at': {str(k): round(mean(vhit[m][k]), 3) for k in KS},
-            'mrr': round(mean(mrr[m]), 3),
         }
     lines = ['# Tier 2 — Answerability a rango (top-k)',
              f'Testset: `{args.testset}` — {nq} query (con valori puntuali: {nvq}).', '',
-             '| metodo | n° chunk | parole/chunk | token/chunk | valori nel 1° | valori nei primi 2 | valori nei primi 3 | MRR |',
-             '|---|---|---|---|---|---|---|---|']
+             '| metodo | n° chunk | parole/chunk | token/chunk | valori nel 1° | valori nei primi 2 | valori nei primi 3 |',
+             '|---|---|---|---|---|---|---|']
     for m, dct in out.items():
         lines.append(f"| {m} | {dct['n_chunks']:.1f} | {dct['words_per_chunk']:.0f} | {dct['tok_per_chunk']:.0f} | "
-                     f"{dct['valori_at']['1']:.3f} | {dct['valori_at']['2']:.3f} | {dct['valori_at']['3']:.3f} | "
-                     f"{dct['mrr']:.3f} |")
+                     f"{dct['valori_at']['1']:.3f} | {dct['valori_at']['2']:.3f} | {dct['valori_at']['3']:.3f} |")
     lines += ['', '_valori nel 1°/nei primi k = % domande con tutti i valori distintivi della risposta nei primi '
-              'k chunk recuperati per coseno con la query. MRR = media di 1/rango del 1° chunk che li completa. '
-              'parole/token-per-chunk = dimensione media del chunk (costo del contesto)._']
+              'k chunk recuperati per coseno con la query. parole/token-per-chunk = dimensione media del chunk '
+              '(costo del contesto)._']
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
     with open(args.out, 'w', encoding='utf-8') as f:
         json.dump({'metric': 'tier2_answerability', 'testset': args.testset,
