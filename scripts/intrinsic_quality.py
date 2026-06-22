@@ -83,6 +83,14 @@ def main():
             if ' | ' in ls: rows.add(ls)
             if _LIST_ITEM.match(line): items.add(ls)
 
+    # Whitespace-robust matching. A chunker may keep a row's CONTENT whole but
+    # reformat its spacing (e.g. adaptive's pipe-row reassembly collapses runs of
+    # spaces); a raw substring test would then report a false "split". We compare
+    # on whitespace-normalised text on both sides so only REAL fragmentation counts.
+    _ws = lambda s: ' '.join(s.split())
+    rows_n = [(_ws(r), r) for r in rows]
+    items_n = [(_ws(i), i) for i in items]
+
     print(f'\nUnità nel corpus: {len(rows)} righe-tabella, {len(items)} voci di lista\n')
     hdr = (f'{"metodo":11} {"#chunk":>6} {"parole":>7} {"token":>6}  '
            f'{"righe_intatte":>13} {"liste_intatte":>13}  {"clean_bounds":>12} {"coerenza":>9}')
@@ -98,10 +106,11 @@ def main():
                 both.append(clean_start(c) and clean_end(c))
                 x = coherence(c, ai)
                 if x is not None: coh.append(x)
-                for r in rows:
-                    if r in c: rseen.add(r)
-                for it in items:
-                    if it in c: iseen.add(it)
+                cn = _ws(c)
+                for rn, r in rows_n:
+                    if rn in cn: rseen.add(r)
+                for itn, it in items_n:
+                    if itn in cn: iseen.add(it)
         out_methods[m] = {
             'n_chunks': nch,
             'avg_words': round(float(np.mean(w)), 1),
