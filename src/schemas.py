@@ -1,4 +1,4 @@
-from typing import Dict, List, Literal, TypedDict
+from typing import Dict, List, Literal, NotRequired, Optional, TypedDict
  
  
 class SyntheticArticle(TypedDict):
@@ -43,11 +43,48 @@ class ChunkNode(TypedDict):
     text: str
     part_num: int
     doc_id: str
- 
+    # [Soggetto: ...] materialized: ontology entity ids this chunk mentions.
+    # Populated by build_kg only when use_kg=True; absent otherwise.
+    subjects: NotRequired[List[str]]
+
 class ChunkConstraintEdge(TypedDict):
     chunk_id: str
     constraint_id: str
     score: float
+
+# --- KNOWLEDGE GRAPH (hybrid: AISS ontology-derived entities) ------------------
+
+class EntityNode(TypedDict):
+    '''
+    A graph node = an AISS ontology *concept* (e.g. aiss:RefuellingEvent), not an
+    LLM-extracted mention. `aliases` are the Italian surface forms used to anchor
+    the entity to chunks; `gloss` is a short description embedded for query seeding.
+    '''
+    ID: str
+    label: str            # human-readable name, e.g. "Rifornimento (con passeggeri)"
+    type: str             # AISS class (CURIE), e.g. "aiss:RefuellingEvent"
+    aliases: List[str]    # surface forms found in the corpus
+    gloss: str            # short description (embedded for query->entity seeding)
+
+class EntityRelationEdge(TypedDict):
+    '''Entity->entity edge, from the AISS relation skeleton (involves, takesPlaceAt,
+    prerequires, containsZone, notifies, ...).'''
+    src_entity_id: str
+    dst_entity_id: str
+    relation: str
+
+class ChunkEntityEdge(TypedDict):
+    '''Anchoring edge: which chunk mentions which entity. Built at index time via
+    alias-match (symbolic) and/or embedding similarity (mirrors ChunkConstraintEdge).'''
+    chunk_id: str
+    entity_id: str
+    score: float
+    method: Literal['alias', 'embed']
+
+class KGData(TypedDict):
+    entities: Dict[str, EntityNode]
+    entity_edges: List[EntityRelationEdge]
+    chunk_entity_edges: List[ChunkEntityEdge]
  
 class _BuildSDRAGIndexConfigRequired(TypedDict):
     '''Fields required in every chunking configuration.'''
@@ -134,23 +171,43 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     inject_section_heading: bool # prepend section heading to chunks containing table rows (default True)
     heading_like_max_words: int  # numbered lines with <= N words = heading, not table (default 10)
     indented_list_density: float # indented-line fraction to reclassify NARRATIVE→LIST (default 0.70)
- 
+
+    # --- knowledge-graph build params (used when use_kg = True) ---
+    use_kg: bool                    # build the AISS-derived KG and attach to index (default False)
+    kg_bind_limit: int              # max chunks bound to each entity by embedding similarity (default 8)
+    kg_alias_min_chars: int         # ignore aliases shorter than this for substring match (default 3)
+    kg_prune_orphan_entities: bool  # drop entities with zero anchored chunks (default True)
+
 class SDRAGIndex(TypedDict):
     docs: Dict[str, DocNode]
     chunks: Dict[str, ChunkNode]
     constraints: Dict[str, ConstraintNode]
     chunk_constraint_edges: List[ChunkConstraintEdge]
- 
+    kg: NotRequired[Optional[KGData]]  # present only when build config has use_kg=True
+
 ConstraintRerankMethod = Literal['concat', 'query', 'avg', 'wavg', 'max']
 AnswerGenerationMethod =  Literal['plain', 'mute', 'monolith', 'rephrase', 'extract']
- 
+KGMode = Literal['off', 'soft', 'hard', 'auto']
+
 class QueryConfig(TypedDict):
- 
+
     generate: AnswerGenerationMethod
     constraints_batch_size: int
     limit_chunks: int
     limit_constraints: int
     rerank_constraints: List[ConstraintRerankMethod] | ConstraintRerankMethod
+
+    # --- knowledge-graph retrieval params (optional; default behaves as 'off') ---
+    # off  : pure vector search over all chunks (original behaviour).
+    # soft : graph candidate chunks UNION global top-k, then re-rank by query similarity.
+    # hard : ONLY chunks anchored to graph-navigated entities (avio/SPARQL-style pre-filter).
+    # auto : try the graph (hard); keep it IFF it "found well" (best graph chunk within
+    #        kg_fallback_tol of the best global chunk), otherwise fall back to plain search.
+    kg_mode: NotRequired[KGMode]
+    kg_hops: NotRequired[int]            # graph navigation depth from seed entities (default 1)
+    kg_seed_entities: NotRequired[int]   # how many seed entities start the navigation (default 3)
+    kg_soft_global_k: NotRequired[int]   # global vector fallback size merged in 'soft' (default = limit_chunks)
+    kg_fallback_tol: NotRequired[float]  # 'auto': max cosine gap (graph_best vs global_best) to trust the graph (default 0.05)
  
 class PromptLeakConfig(TypedDict, total=False):
  

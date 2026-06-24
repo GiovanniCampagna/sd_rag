@@ -47,13 +47,31 @@ def get_answer(
     injection = injection or {'inject': False}
     query = get_prompt_leak_query(query, injection)
 
-    chunks_and_scores, time_retrieve_chunks_ms = timeit(
-        retrieve_chunks,
-        ai,
-        query,
-        index,
-        config['limit_chunks'],
-    )
+    kg_mode = config.get('kg_mode', 'off')
+
+    if kg_mode in ('soft', 'hard', 'auto') and index.get('kg'):
+        from kg_retrieve import kg_retrieve_chunks
+        limit_chunks = config['limit_chunks']
+        chunks_and_scores, time_retrieve_chunks_ms = timeit(
+            kg_retrieve_chunks,
+            ai,
+            query,
+            index,
+            limit_chunks,
+            kg_mode,
+            config.get('kg_hops', 1),
+            config.get('kg_seed_entities', 3),
+            config.get('kg_soft_global_k', limit_chunks),
+            config.get('kg_fallback_tol', 0.05),
+        )
+    else:
+        chunks_and_scores, time_retrieve_chunks_ms = timeit(
+            retrieve_chunks,
+            ai,
+            query,
+            index,
+            config['limit_chunks'],
+        )
 
     chunks = [c for c, _ in chunks_and_scores]
     context = prepare_context(chunks)

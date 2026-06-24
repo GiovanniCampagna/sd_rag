@@ -162,11 +162,28 @@ def build_index(
     
     log.info(f'Inserted {len(constraints)} constraints into index.')
     log.info(f'Inserted {len(constraint_edges)} constraints-chunk edges.')
+
+    # Optional knowledge-graph layer (hybrid, AISS-derived).
+    kg = None
+    if config.get('use_kg', False):
+        from build_kg import build_kg
+        from kg_ontology import get_ontology
+        kg = build_kg(
+            ai,
+            chunks_list,
+            chunk_embeddings,
+            get_ontology(),
+            bind_limit=config.get('kg_bind_limit', 8),
+            alias_min_chars=config.get('kg_alias_min_chars', 3),
+            prune_orphan_entities=config.get('kg_prune_orphan_entities', True),
+        )
+
     log.info('Done building index.')
- 
+
     return {
         'chunk_constraint_edges': constraint_edges,
         'chunks': chunks,
         'constraints': constraints,
         'docs': docs,
+        'kg': kg,
     }
