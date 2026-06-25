@@ -86,11 +86,21 @@ def redact_extract(
 ) -> str:
 
     phrases = get_sensitive_phrases(
-        ai, 
-        context, 
-        constraints, 
+        ai,
+        context,
+        constraints,
         batch_size,
     )
+
+    # Match phrases against the ORIGINAL passage, never the progressively redacted
+    # one. On the mutated context get_best_match can land on a FRAGMENT of an
+    # already inserted placeholder (e.g. "DACTE", a substring of "<REDACTED>"), and
+    # context.replace then wraps every placeholder -> "<RE<REDACTED>D>", then
+    # "<RE<RE<REDACTED>D>D>" ... The word count barely changes but those fragments
+    # tokenize into hundreds of sub-tokens, blowing the prompt past the model
+    # window. Seen only with --merge: cross-section constraints make the extractor
+    # return spurious short phrases that fuzzy-match those fragments.
+    original_context = context
 
     # Replace every sensitive phrase span
     for phrase in phrases:
@@ -100,18 +110,20 @@ def redact_extract(
         if not phrase or len(phrase.strip()) < 4:
             continue
 
-        # LLM-quoted strings aren't perfect, find the best match
-        _, _, ratio, best_match = get_best_match(phrase, context)
+        # LLM-quoted strings aren't perfect, find the best match (on the original)
+        _, _, ratio, best_match = get_best_match(phrase, original_context)
 
         # Guards against degenerate replaces (they caused exploding contexts with
         # local models that return imprecise phrases):
         #  - empty or too-short best_match -> the replace self-amplifies
         #  - low-quality match -> unreliable, better not to redact
-        #  - best_match already containing the placeholder -> cascading re-substitution
+        #  - best_match containing OR contained in the placeholder -> cascading
+        #    re-substitution (the latter is the "DACTE" fragment case above)
         if (not best_match
                 or len(best_match) < 4
                 or ratio < 0.6
-                or placeholder in best_match):
+                or placeholder in best_match
+                or best_match in placeholder):
             continue
 
         # Replace all instances of the best match
