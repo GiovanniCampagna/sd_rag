@@ -75,6 +75,7 @@ def get_answer(
 
     chunks = [c for c, _ in chunks_and_scores]
     context = prepare_context(chunks)
+    log.info(f"[DEBUG] chunk recuperati={len(chunks)}  parole_context={len(context.split())}  limit_chunks={config['limit_chunks']}")
 
     constraints, time_retrieve_constraints_ms = timeit(
         retrieve_constraints,
