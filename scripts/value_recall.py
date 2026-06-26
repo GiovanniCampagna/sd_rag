@@ -1,5 +1,5 @@
 """
-Tier 2 — Answerability a rango (top-k). Sostituisce il vecchio coverage@budget.
+Tier 2 — Recall dei valori (top-k). Sostituisce il vecchio coverage@budget.
 
 Perche' non il budget di token: riempire un budget con PIU' chunk lascia che i metodi
 deboli compensino (tanti chunk piccoli "coprono" quanto un buon chunk solo), e la
@@ -14,7 +14,7 @@ Metriche, parametro-free (niente soglia, niente budget), sui valori puntuali:
 Accanto, la dimensione/costo: parole/chunk, token/chunk, n. chunk.
 
 Uso:
-  env/Scripts/python.exe scripts/answerability.py --testset datasets/testset.json \
+  env/Scripts/python.exe scripts/value_recall.py --testset datasets/testset.json \
       --out results/tier2_isp.json
 """
 import sys, os, json, re, argparse
@@ -53,8 +53,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--testset', required=True)
     ap.add_argument('--ai', default='configs/ai.config.nomic.only.json')
-    ap.add_argument('--out', default='results/tier2_answerability.json',
+    ap.add_argument('--out', default='results/tier2_value_recall.json',
                     help='dove salvare i risultati (JSON + tabella .md a fianco)')
+    ap.add_argument('--merge', action=argparse.BooleanOptionalAction, default=False,
+                    help='indice UNICO su tutte le sezioni (retrieval realistico, coi distrattori '
+                         'cross-sezione) invece che per-sezione; ogni query ranka contro il pool intero')
     args = ap.parse_args()
     ai = AI(*json.loads(open(args.ai).read()))
     testset = json.load(open(args.testset, encoding='utf-8'))
@@ -66,9 +69,16 @@ def main():
     nvq = 0
 
     for m, fn in METHODS.items():
-        for tc in testset:
-            text = tc['text']
-            chunks = fn(text, ai)
+        # A "unit" = (chunks, queries). No-merge: one unit per section (la query ranka
+        # solo tra i chunk della sua sezione). Merge: un unico pool di tutti i chunk del
+        # corpus e TUTTE le query rankano contro quello (distrattori cross-sezione).
+        if args.merge:
+            pool = [c for tc in testset for c in fn(tc['text'], ai)]
+            units = [(pool, [(qa, tc['text']) for tc in testset for qa in tc['qa_pairs']])]
+        else:
+            units = [(fn(tc['text'], ai), [(qa, tc['text']) for qa in tc['qa_pairs']]) for tc in testset]
+
+        for chunks, queries in units:
             if not chunks:
                 continue
             nchunks[m].append(len(chunks))
@@ -77,7 +87,7 @@ def main():
             cnorm = [_norm(c) for c in chunks]
             cemb = ai.e.embed(chunks)
 
-            for qa in tc['qa_pairs']:
+            for qa, text in queries:
                 gold = qa['unredacted_answer_text']
                 gvals = {v for v in gold_values(gold) if v in _norm(text)}
                 if not gvals:
@@ -100,7 +110,8 @@ def main():
 
     # ---- report ----
     nq = sum(len(tc['qa_pairs']) for tc in testset)
-    print(f'\nTestset: {args.testset} — {nq} query (con valori puntuali: {nvq})\n')
+    print(f'\nTestset: {args.testset} [{"MERGE: indice unico" if args.merge else "no-merge: per-sezione"}] '
+          f'— {nq} query (con valori puntuali: {nvq})\n')
     hdr = (f'{"metodo":11} {"n.chunk":>7} {"parole/chunk":>12} {"token/chunk":>11}  '
            f'{"val@1":>6} {"val@2":>6} {"val@3":>6}')
     print(hdr); print('-' * len(hdr))
@@ -119,7 +130,7 @@ def main():
             'tok_per_chunk': round(mean(chunktok[m]), 1),
             'valori_at': {str(k): round(mean(vhit[m][k]), 3) for k in KS},
         }
-    lines = ['# Tier 2 — Answerability a rango (top-k)',
+    lines = ['# Tier 2 — Recall dei valori (top-k)',
              f'Testset: `{args.testset}` — {nq} query (con valori puntuali: {nvq}).', '',
              '| metodo | n° chunk | parole/chunk | token/chunk | valori nel 1° | valori nei primi 2 | valori nei primi 3 |',
              '|---|---|---|---|---|---|---|']
@@ -131,7 +142,7 @@ def main():
               '(costo del contesto)._']
     os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
     with open(args.out, 'w', encoding='utf-8') as f:
-        json.dump({'metric': 'tier2_answerability', 'testset': args.testset,
+        json.dump({'metric': 'tier2_value_recall', 'testset': args.testset, 'merge': args.merge,
                    'n_queries': nq, 'n_value_queries': nvq, 'methods': out}, f, ensure_ascii=False, indent=2)
     with open(os.path.splitext(args.out)[0] + '.md', 'w', encoding='utf-8') as f:
         f.write('\n'.join(lines) + '\n')
