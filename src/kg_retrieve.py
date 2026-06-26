@@ -8,12 +8,11 @@ Flow (matches the diagram: query -> entity -> graph -> neighbouring chunks):
   4. RANK    : score those chunks by cosine similarity to the query.
 
 Modes:
-  soft : rank over (candidate chunks UNION global top-k)  -> robust, never starves.
-  hard : rank over candidate chunks only (avio/SPARQL-style hard pre-filter); falls
-         back to global vector search only if the graph yields nothing.
-  auto : try the graph (hard) and KEEP it only if it "found well" — i.e. the best
-         graph chunk is within kg_fallback_tol (cosine) of the best global chunk;
-         otherwise use the plain vector search. "se trovo bene, altrimenti il solito metodo."
+  off  : pure vector search over all chunks (handled by the caller, not here).
+  auto : restrict to the chunks anchored to the navigated entities, re-rank that pool by
+         query similarity, and KEEP it only if the graph "found well" — i.e. the best graph
+         chunk is within kg_fallback_tol (cosine) of the best global chunk; otherwise fall
+         back to plain vector search. "se trovo bene, altrimenti il solito metodo."
 """
 
 import logging
@@ -85,7 +84,6 @@ def kg_retrieve_chunks(
     mode: str,
     hops: int,
     n_seeds: int,
-    soft_global_k: int,
     fallback_tol: float = 0.05,
 ) -> List[Tuple[ChunkNode, float]]:
     """Graph-driven chunk retrieval. Returns chunks_and_scores like retrieve_chunks."""
@@ -95,7 +93,7 @@ def kg_retrieve_chunks(
     all_embeddings = ai.e.embed([c['text'] for c in all_chunks])
     query_embedding = ai.e.embed(query)
 
-    # Global ranking is always computed: soft-mode union partner / hard/auto fallback.
+    # Global ranking is always computed: it is the 'auto' fallback.
     global_ranked = get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=len(all_chunks))
 
     if not kg:
@@ -117,16 +115,6 @@ def kg_retrieve_chunks(
         pool_embeddings = ai.e.embed([c['text'] for c in pool])
         return get_similarity_scores(query_embedding, pool, pool_embeddings, limit=limit)
 
-    if mode == 'soft':
-        global_top_ids = {c['ID'] for c, _ in global_ranked[:soft_global_k]}
-        return rank_pool(set(candidate_ids) | global_top_ids) or global_ranked[:limit]
-
-    if mode == 'hard':
-        if not candidate_ids:
-            log.info('KG hard mode: empty candidate set, falling back to global search.')
-            return global_ranked[:limit]
-        return rank_pool(set(candidate_ids))
-
     if mode == 'auto':
         # "se trovo bene, altrimenti il solito metodo": trust the graph only if its
         # best chunk is about as relevant as the overall best chunk.
@@ -142,5 +130,5 @@ def kg_retrieve_chunks(
         log.info(f'KG auto: graph missed (kg_best={kg_best:.3f} < global_best={global_best:.3f} - {fallback_tol}) -> plain search.')
         return global_ranked[:limit]
 
-    # safety: behave as global
+    # safety: any unknown mode behaves as global (off)
     return global_ranked[:limit]

@@ -187,7 +187,7 @@ class SDRAGIndex(TypedDict):
 
 ConstraintRerankMethod = Literal['concat', 'query', 'avg', 'wavg', 'max']
 AnswerGenerationMethod =  Literal['plain', 'mute', 'monolith', 'rephrase', 'extract']
-KGMode = Literal['off', 'soft', 'hard', 'auto']
+KGMode = Literal['off', 'auto']
 
 class QueryConfig(TypedDict):
 
@@ -199,14 +199,12 @@ class QueryConfig(TypedDict):
 
     # --- knowledge-graph retrieval params (optional; default behaves as 'off') ---
     # off  : pure vector search over all chunks (original behaviour).
-    # soft : graph candidate chunks UNION global top-k, then re-rank by query similarity.
-    # hard : ONLY chunks anchored to graph-navigated entities (avio/SPARQL-style pre-filter).
-    # auto : try the graph (hard); keep it IFF it "found well" (best graph chunk within
-    #        kg_fallback_tol of the best global chunk), otherwise fall back to plain search.
+    # auto : restrict to chunks anchored to the graph-navigated entities, then re-rank that
+    #        pool by query similarity; fall back to plain search when the graph adds nothing
+    #        (empty pool, or best graph chunk worse than best global chunk by > kg_fallback_tol).
     kg_mode: NotRequired[KGMode]
     kg_hops: NotRequired[int]            # graph navigation depth from seed entities (default 1)
     kg_seed_entities: NotRequired[int]   # how many seed entities start the navigation (default 3)
-    kg_soft_global_k: NotRequired[int]   # global vector fallback size merged in 'soft' (default = limit_chunks)
     kg_fallback_tol: NotRequired[float]  # 'auto': max cosine gap (graph_best vs global_best) to trust the graph (default 0.05)
  
 class PromptLeakConfig(TypedDict, total=False):
