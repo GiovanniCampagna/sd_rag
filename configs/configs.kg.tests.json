@@ -12,7 +12,7 @@
     "tabular_max_words": 200,
     "inject_section_heading": true,
     "heading_like_max_words": 10,
-    "indented_list_density": 0.70,
+    "indented_list_density": 0.7,
     "use_kg": true,
     "kg_bind_limit": 8,
     "kg_alias_min_chars": 3,
@@ -24,11 +24,11 @@
     "kg_mode": "auto",
     "kg_hops": 1,
     "kg_seed_entities": 3,
-    "kg_fallback_tol": 0.05,
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "extract",
-    "inject": false
+    "inject": false,
+    "kg_rerank_alpha": 0.1
   },
   {
     "label": "kg-adaptive",
@@ -43,7 +43,7 @@
     "tabular_max_words": 200,
     "inject_section_heading": true,
     "heading_like_max_words": 10,
-    "indented_list_density": 0.70,
+    "indented_list_density": 0.7,
     "use_kg": true,
     "kg_bind_limit": 8,
     "kg_alias_min_chars": 3,
@@ -55,11 +55,11 @@
     "kg_mode": "auto",
     "kg_hops": 1,
     "kg_seed_entities": 3,
-    "kg_fallback_tol": 0.05,
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "extract",
-    "inject": true
+    "inject": true,
+    "kg_rerank_alpha": 0.1
   },
   {
     "label": "kg-adaptive",
@@ -74,7 +74,7 @@
     "tabular_max_words": 200,
     "inject_section_heading": true,
     "heading_like_max_words": 10,
-    "indented_list_density": 0.70,
+    "indented_list_density": 0.7,
     "use_kg": true,
     "kg_bind_limit": 8,
     "kg_alias_min_chars": 3,
@@ -86,11 +86,11 @@
     "kg_mode": "auto",
     "kg_hops": 1,
     "kg_seed_entities": 3,
-    "kg_fallback_tol": 0.05,
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "monolith",
-    "inject": false
+    "inject": false,
+    "kg_rerank_alpha": 0.1
   },
   {
     "label": "kg-adaptive",
@@ -105,7 +105,7 @@
     "tabular_max_words": 200,
     "inject_section_heading": true,
     "heading_like_max_words": 10,
-    "indented_list_density": 0.70,
+    "indented_list_density": 0.7,
     "use_kg": true,
     "kg_bind_limit": 8,
     "kg_alias_min_chars": 3,
@@ -117,11 +117,11 @@
     "kg_mode": "auto",
     "kg_hops": 1,
     "kg_seed_entities": 3,
-    "kg_fallback_tol": 0.05,
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "monolith",
-    "inject": true
+    "inject": true,
+    "kg_rerank_alpha": 0.1
   },
   {
     "label": "kg-adaptive",
@@ -136,7 +136,7 @@
     "tabular_max_words": 200,
     "inject_section_heading": true,
     "heading_like_max_words": 10,
-    "indented_list_density": 0.70,
+    "indented_list_density": 0.7,
     "use_kg": true,
     "kg_bind_limit": 8,
     "kg_alias_min_chars": 3,
@@ -148,11 +148,11 @@
     "kg_mode": "auto",
     "kg_hops": 1,
     "kg_seed_entities": 3,
-    "kg_fallback_tol": 0.05,
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "rephrase",
-    "inject": false
+    "inject": false,
+    "kg_rerank_alpha": 0.1
   },
   {
     "label": "kg-adaptive",
@@ -167,7 +167,7 @@
     "tabular_max_words": 200,
     "inject_section_heading": true,
     "heading_like_max_words": 10,
-    "indented_list_density": 0.70,
+    "indented_list_density": 0.7,
     "use_kg": true,
     "kg_bind_limit": 8,
     "kg_alias_min_chars": 3,
@@ -179,10 +179,10 @@
     "kg_mode": "auto",
     "kg_hops": 1,
     "kg_seed_entities": 3,
-    "kg_fallback_tol": 0.05,
     "inject_max_query_percent": 0.9,
     "inject_repeat": 2,
     "generate": "rephrase",
-    "inject": true
+    "inject": true,
+    "kg_rerank_alpha": 0.1
   }
 ]

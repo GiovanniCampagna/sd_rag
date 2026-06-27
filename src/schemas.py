@@ -199,13 +199,14 @@ class QueryConfig(TypedDict):
 
     # --- knowledge-graph retrieval params (optional; default behaves as 'off') ---
     # off  : pure vector search over all chunks (original behaviour).
-    # auto : restrict to chunks anchored to the graph-navigated entities, then re-rank that
-    #        pool by query similarity; fall back to plain search when the graph adds nothing
-    #        (empty pool, or best graph chunk worse than best global chunk by > kg_fallback_tol).
+    # auto : restrict to chunks anchored to the graph-navigated entities, then re-rank that pool
+    #        by  cosine + kg_rerank_alpha * graph_bonus , where graph_bonus rewards chunks sharing
+    #        the query's *specific* (high-IDF) entities. Falls back to plain search when the graph
+    #        adds nothing (empty pool, or no chunk shares a specific entity with the query).
     kg_mode: NotRequired[KGMode]
     kg_hops: NotRequired[int]            # graph navigation depth from seed entities (default 1)
     kg_seed_entities: NotRequired[int]   # how many seed entities start the navigation (default 3)
-    kg_fallback_tol: NotRequired[float]  # 'auto': max cosine gap (graph_best vs global_best) to trust the graph (default 0.05)
+    kg_rerank_alpha: NotRequired[float]  # weight of the graph bonus vs cosine in 'auto' (default 0.10; >0.15 starts to hurt)
  
 class PromptLeakConfig(TypedDict, total=False):
  
