@@ -38,13 +38,9 @@ if TYPE_CHECKING:
 # Constants and patterns
 # ---------------------------------------------------------------------------
 
-_TABULAR_ROW_RE    = re.compile(r'^\s*\d+\.\d+(?:\.\d+)*\s+\S', re.MULTILINE)
-_MULTI_COLUMN_RE   = re.compile(r'\S[ \t]{3,}\S')
-_MULTI_COLUMN_2_RE = re.compile(r'\S[ \t]{2,}\S')
 _LIST_ITEM_RE      = re.compile(r'^\s*(?:[a-zA-Z]\)|[•\-–—*→➔►▶])\s+\S', re.MULTILINE)
 _INDENTED_ITEM_RE  = re.compile(r'^ {1,4}\S')
 
-_HEADING_LIKE_MAX_WORDS = 10   # a numbered line with <= N words is a heading, not a table
 _INDENTED_LIST_DENSITY  = 0.70 # threshold to reclassify a NARRATIVE block as LIST_HEAVY
 
 _TABULAR    = 'TABULAR'
@@ -56,25 +52,26 @@ _NARRATIVE  = 'NARRATIVE'
 # Line / block classification
 # ---------------------------------------------------------------------------
 
-def _classify_line(line: str, heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS) -> str:
-    """Classify a non-empty line as TABULAR, LIST_HEAVY or NARRATIVE."""
+def _classify_line(line: str) -> str:
+    """
+    Classify a non-empty line as TABULAR, LIST_HEAVY or NARRATIVE.
+
+    A line is TABULAR only if it is a REAL table row, recognised by explicit ' | '
+    cell separators (the format the PDF extraction emits for tables). A merely
+    numbered or space-aligned line is NOT a table: it is a heading/prose (NARRATIVE)
+    or, with a marker, a list item (LIST_HEAVY).
+    """
     if ' | ' in line:
-        return _TABULAR
-    # Short numbered heading (e.g. "3.2 Prescrizioni..."): no cells -> NARRATIVE
-    if (_TABULAR_ROW_RE.match(line)
-            and not _MULTI_COLUMN_2_RE.search(line)
-            and len(line.split()) <= heading_like_max_words):
-        return _NARRATIVE
-    if _TABULAR_ROW_RE.match(line) or _MULTI_COLUMN_RE.search(line):
         return _TABULAR
     if _LIST_ITEM_RE.match(line):
         return _LIST_HEAVY
     return _NARRATIVE
 
 
-def _has_tabular_line(text: str, heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS) -> bool:
+def _has_tabular_line(text: str) -> bool:
     """
-    True if at least one non-empty line of the text is classified as TABULAR.
+    True if at least one non-empty line of the text is classified as TABULAR
+    (i.e. contains explicit ' | ' table cells).
 
     Used to decide section-heading injection: a table row (e.g. "4.3.2 | ... | ...")
     is cryptic without the section title even when the chunk as a whole is labelled
@@ -83,7 +80,7 @@ def _has_tabular_line(text: str, heading_like_max_words: int = _HEADING_LIKE_MAX
     chunks where a TABULAR block was merged into a NARRATIVE one during the merge phase.
     """
     return any(
-        stripped and _classify_line(stripped, heading_like_max_words) == _TABULAR
+        stripped and _classify_line(stripped) == _TABULAR
         for stripped in (line.strip() for line in text.split('\n'))
     )
 
@@ -114,7 +111,6 @@ def _is_dense_indented_block(lines: List[str], density: float = _INDENTED_LIST_D
 
 def _split_into_typed_blocks(
     text: str,
-    heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS,
     indented_list_density: float = _INDENTED_LIST_DENSITY,
 ) -> List[Tuple[str, str]]:
     """
@@ -133,7 +129,7 @@ def _split_into_typed_blocks(
             if current_lines:
                 current_lines.append(line)
             continue
-        line_type = _classify_line(stripped, heading_like_max_words)
+        line_type = _classify_line(stripped)
         if line_type != current_type:
             if current_lines:
                 block_text = '\n'.join(current_lines).strip()
@@ -336,7 +332,6 @@ def make_chunks_adaptive(
     tabular_max_rows: int = 3,
     tabular_max_words: int = 200,
     inject_section_heading: bool = True,
-    heading_like_max_words: int = _HEADING_LIKE_MAX_WORDS,
     indented_list_density: float = _INDENTED_LIST_DENSITY,
 ) -> List[str]:
     """
@@ -363,8 +358,6 @@ def make_chunks_adaptive(
                             are cryptic without context. Lists and pure prose stay without
                             it, since they are self-contained (the list intro is attached
                             by _attach_list_intros) (default True)
-    heading_like_max_words: numbered lines with <= N words are treated as headings
-                            (NARRATIVE) and not as table rows (default 10)
     indented_list_density : fraction of indented lines above which a NARRATIVE block
                             is reclassified as LIST_HEAVY (default 0.70)
     """
@@ -410,12 +403,12 @@ def make_chunks_adaptive(
 
     for section_id, _section_heading, block in section_blocks:
         if _word_count(block) <= max_words:
-            first_type = _split_into_typed_blocks(block, heading_like_max_words, indented_list_density)[0][0]
+            first_type = _split_into_typed_blocks(block, indented_list_density)[0][0]
             raw_chunks.append((section_id, first_type, block))
             continue
 
         typed_blocks = _attach_list_intros(
-            _split_into_typed_blocks(block, heading_like_max_words, indented_list_density))
+            _split_into_typed_blocks(block, indented_list_density))
         for content_type, typed_text in typed_blocks:
             # Tables always go through the tabular sub-split: group by rows
             # (tabular_max_rows) within a word cap (tabular_max_words). This way
@@ -510,7 +503,7 @@ def make_chunks_adaptive(
             # _attach_list_intros), which would only blur the embedding.
             if (heading and not chunk_text.startswith(heading)
                     and (content_type == _TABULAR
-                         or _has_tabular_line(chunk_text, heading_like_max_words))):
+                         or _has_tabular_line(chunk_text))):
                 chunk_text = heading + '\n' + chunk_text
             updated.append((section_id, content_type, chunk_text))
         merged = updated

@@ -141,8 +141,6 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
         tabular_max_words     — word safety cap for a TABULAR chunk, applied together with
                                 tabular_max_rows (whichever is hit first, default 200).
         inject_section_heading — if True, each chunk is prefixed with its section heading (default True).
-        heading_like_max_words — numbered lines with <= N words are treated as headings
-                                 (NARRATIVE) rather than table rows (default 10).
         indented_list_density  — fraction of indented lines above which a NARRATIVE block
                                  is reclassified as LIST_HEAVY (default 0.70).
 
@@ -169,7 +167,6 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     tabular_max_rows: int        # max table rows per TABULAR chunk; 0 = word-limit only (default 3)
     tabular_max_words: int       # word safety cap for a TABULAR chunk, applied alongside tabular_max_rows (default 200)
     inject_section_heading: bool # prepend section heading to chunks containing table rows (default True)
-    heading_like_max_words: int  # numbered lines with <= N words = heading, not table (default 10)
     indented_list_density: float # indented-line fraction to reclassify NARRATIVE→LIST (default 0.70)
 
     # --- knowledge-graph build params (used when use_kg = True) ---

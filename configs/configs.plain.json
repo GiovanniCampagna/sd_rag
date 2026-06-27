@@ -75,7 +75,6 @@
     "tabular_max_rows": 3,
     "tabular_max_words": 200,
     "inject_section_heading": true,
-    "heading_like_max_words": 10,
     "indented_list_density": 0.7,
     "constraints_batch_size": 3,
     "limit_chunks": 3,
