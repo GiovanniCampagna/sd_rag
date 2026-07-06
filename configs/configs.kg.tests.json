@@ -27,7 +27,6 @@
     "inject_repeat": 2,
     "generate": "extract",
     "inject": false,
-    "kg_rerank_alpha": 0.1,
     "kg_embed_min_score": 0.5
   },
   {
@@ -58,7 +57,6 @@
     "inject_repeat": 2,
     "generate": "extract",
     "inject": true,
-    "kg_rerank_alpha": 0.1,
     "kg_embed_min_score": 0.5
   },
   {
@@ -89,7 +87,6 @@
     "inject_repeat": 2,
     "generate": "monolith",
     "inject": false,
-    "kg_rerank_alpha": 0.1,
     "kg_embed_min_score": 0.5
   },
   {
@@ -120,7 +117,6 @@
     "inject_repeat": 2,
     "generate": "monolith",
     "inject": true,
-    "kg_rerank_alpha": 0.1,
     "kg_embed_min_score": 0.5
   },
   {
@@ -151,7 +147,6 @@
     "inject_repeat": 2,
     "generate": "rephrase",
     "inject": false,
-    "kg_rerank_alpha": 0.1,
     "kg_embed_min_score": 0.5
   },
   {
@@ -182,7 +177,6 @@
     "inject_repeat": 2,
     "generate": "rephrase",
     "inject": true,
-    "kg_rerank_alpha": 0.1,
     "kg_embed_min_score": 0.5
   }
 ]

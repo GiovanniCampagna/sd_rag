@@ -197,14 +197,12 @@ class QueryConfig(TypedDict):
 
     # --- knowledge-graph retrieval params (optional; default behaves as 'off') ---
     # off  : pure vector search over all chunks (original behaviour).
-    # auto : restrict to chunks anchored to the graph-navigated entities, then re-rank that pool
-    #        by  cosine + kg_rerank_alpha * graph_bonus , where graph_bonus rewards chunks sharing
-    #        the query's *specific* (high-IDF) entities. Falls back to plain search when the graph
-    #        adds nothing (empty pool, or no chunk shares a specific entity with the query).
+    # auto : restrict to the chunks anchored to the graph-navigated entities, then rank
+    #        that pool by cosine similarity with the query (same scoring as the plain
+    #        retrieval); falls back to plain search when the query anchors no entity.
     kg_mode: NotRequired[KGMode]
     kg_hops: NotRequired[int]            # graph navigation depth from seed entities (default 1)
     kg_seed_entities: NotRequired[int]   # how many seed entities start the navigation (default 3)
-    kg_rerank_alpha: NotRequired[float]  # weight of the graph bonus vs cosine in 'auto' (default 0.10; >0.15 starts to hurt)
  
 class PromptLeakConfig(TypedDict, total=False):
  

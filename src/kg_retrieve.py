@@ -1,26 +1,26 @@
 """
 Knowledge-graph retrieval (the query-time half of the hybrid approach).
 
-Flow (matches the diagram: query -> entity -> graph -> neighbouring chunks):
+Flow (matches the reference diagram: query -> entity -> graph -> nearby chunks):
   1. SEED    : entities most relevant to the query (cosine query<->gloss + alias in query).
   2. NAVIGATE: BFS over the entity->entity skeleton up to `hops` neighbours.
-  3. COLLECT : gather the chunk_ids anchored to every visited entity.
-  4. RANK    : score those chunks by cosine similarity to the query.
+  3. COLLECT : gather the chunk_ids anchored to every visited entity (the candidate pool).
+  4. RANK    : score the pool by cosine similarity to the query, exactly like the plain
+               retrieval — the graph only decides WHICH chunks compete, not how they score.
 
 Modes:
   off  : pure vector search over all chunks (handled by the caller, not here).
-  auto : restrict to the chunks anchored to the navigated entities, then RE-RANK that pool by
-             final = cosine(query, chunk) + alpha * (graph_bonus / max_bonus)
-         where graph_bonus rewards a chunk for sharing the query's *specific* (high-IDF)
-         entities, decayed by graph distance. This lets a low-cosine but strongly
-         entity-linked chunk (e.g. the VVF contacts) rise into the top-k. Falls back to plain
-         search when the graph adds nothing (empty pool, or no specific entity overlap) —
+  auto : restrict to the graph pool, rank it by cosine; fall back to plain search over
+         all chunks when the query anchors no entity (empty pool) —
          "se trovo bene, altrimenti il solito metodo".
+
+NOTE: a graph-bonus re-ranker (final = cosine + alpha * IDF-weighted entity overlap)
+was implemented and measured (git 0661a6b), then deliberately reverted: the chosen
+design keeps the scoring identical to the plain pipeline downstream of the pool.
 """
 
 import logging
-import math
-from collections import deque, defaultdict
+from collections import deque
 from typing import Dict, List, Set, Tuple
 
 from ai import AI, get_similarity_scores
@@ -57,9 +57,8 @@ def _seed_entities(ai: AI, query: str, kg: KGData, n_seeds: int) -> List[str]:
     return seed_ids
 
 
-def _navigate(kg: KGData, seed_ids: List[str], hops: int) -> Dict[str, int]:
-    """BFS over entity edges (undirected) up to `hops` from the seeds.
-    Returns {entity_id: hop distance from the nearest seed} (seeds = distance 0)."""
+def _navigate(kg: KGData, seed_ids: List[str], hops: int) -> Set[str]:
+    """BFS over entity edges (undirected) up to `hops` from the seeds."""
     adjacency: Dict[str, Set[str]] = {eid: set() for eid in kg['entities']}
     for edge in kg['entity_edges']:
         a, b = edge['src_entity_id'], edge['dst_entity_id']
@@ -67,18 +66,18 @@ def _navigate(kg: KGData, seed_ids: List[str], hops: int) -> Dict[str, int]:
             adjacency[a].add(b)
             adjacency[b].add(a)
 
-    dist: Dict[str, int] = {}
+    visited: Set[str] = set()
     frontier = deque((eid, 0) for eid in seed_ids if eid in adjacency)
     while frontier:
         eid, depth = frontier.popleft()
-        if eid in dist:
+        if eid in visited:
             continue
-        dist[eid] = depth
+        visited.add(eid)
         if depth < hops:
             for nbr in adjacency[eid]:
-                if nbr not in dist:
+                if nbr not in visited:
                     frontier.append((nbr, depth + 1))
-    return dist
+    return visited
 
 
 def _candidate_chunk_ids(kg: KGData, entity_ids: Set[str]) -> Set[str]:
@@ -92,7 +91,6 @@ def kg_retrieve_chunks(
     limit: int,
     hops: int,
     n_seeds: int,
-    alpha: float = 0.10,
 ) -> List[Tuple[ChunkNode, float]]:
     """Graph-driven chunk retrieval. Returns chunks_and_scores like retrieve_chunks."""
 
@@ -101,65 +99,24 @@ def kg_retrieve_chunks(
     all_embeddings = ai.e.embed([c['text'] for c in all_chunks])
     query_embedding = ai.e.embed(query)
 
-    # Global cosine ranking is always computed: it is the 'auto' fallback and the
-    # base score the re-ranker adds the graph bonus on top of.
-    global_ranked = get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=len(all_chunks))
-
     if not kg:
         log.warning('kg_retrieve_chunks called but index has no KG; using global vector search.')
-        return global_ranked[:limit]
+        return get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=limit)
 
     seeds = _seed_entities(ai, query, kg, n_seeds)
-    visited = _navigate(kg, seeds, hops)          # entity_id -> hop distance from nearest seed
-    candidate_ids = _candidate_chunk_ids(kg, set(visited))
+    visited = _navigate(kg, seeds, hops)
+    candidate_ids = _candidate_chunk_ids(kg, visited)
     log.info(
         f'KG retrieval: seeds={seeds} | visited={sorted(visited)} | '
         f'{len(candidate_ids)} candidate chunks'
     )
 
     if not candidate_ids:
+        # "se non c'e' corrispondenza passa a off": plain search over all chunks
         log.info('KG auto: empty candidate set -> plain search (off).')
-        return global_ranked[:limit]
+        return get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=limit)
 
-    # --- RE-RANKER:  final = cosine + alpha * (graph_bonus / max_bonus) -------
-    cos_of = {c['ID']: s for c, s in global_ranked}
-
-    # subjects (alias-anchored entities) per chunk + entity specificity (IDF)
-    subjects_of: Dict[str, Set[str]] = defaultdict(set)
-    entity_chunks: Dict[str, Set[str]] = defaultdict(set)
-    for e in kg['chunk_entity_edges']:
-        if e['method'] == 'alias':
-            subjects_of[e['chunk_id']].add(e['entity_id'])
-            entity_chunks[e['entity_id']].add(e['chunk_id'])
-    n_total = len(all_chunks)
-    idf = {ent: math.log(n_total / len(chs)) for ent, chs in entity_chunks.items() if chs}
-
-    def graph_bonus(chunk_id: str) -> float:
-        # reward chunks sharing the query's *specific* (high-IDF) entities; decay by graph distance
-        return sum(
-            idf.get(ent, 0.0) * (0.5 ** visited[ent])
-            for ent in subjects_of.get(chunk_id, ())
-            if ent in visited
-        )
-
+    # The graph only restricted the pool; scoring is plain cosine, as in retrieve_chunks.
     pool = [c for c in all_chunks if c['ID'] in candidate_ids]
-    bonuses = {c['ID']: graph_bonus(c['ID']) for c in pool}
-    max_bonus = max(bonuses.values(), default=0.0)
-
-    if max_bonus <= 0.0:
-        # the query maps only to ubiquitous entities (or none) -> graph adds nothing
-        log.info('KG auto: no specific entity overlap -> plain search (off).')
-        return global_ranked[:limit]
-
-    scored = sorted(
-        ((c, cos_of.get(c['ID'], 0.0) + alpha * (bonuses[c['ID']] / max_bonus)) for c in pool),
-        key=lambda x: x[1], reverse=True,
-    )
-    top = scored[:limit]
-    log.info(
-        'KG auto rerank top: ' + ' | '.join(
-            f"{c['ID'][:6]} cos={cos_of.get(c['ID'], 0.0):.3f} bonus={bonuses[c['ID']]:.2f} -> {s:.3f}"
-            for c, s in top
-        )
-    )
-    return top
+    pool_embeddings = ai.e.embed([c['text'] for c in pool])
+    return get_similarity_scores(query_embedding, pool, pool_embeddings, limit=limit)
