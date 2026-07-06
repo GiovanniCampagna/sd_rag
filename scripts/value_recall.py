@@ -27,6 +27,9 @@ from make_chunks_semantic import make_chunks_semantic
 from make_chunks_structural import make_chunks_structural
 from make_chunks_structural_semantic import make_chunks_structural_semantic
 from make_chunks_adaptive import make_chunks_adaptive
+from build_kg import build_kg
+from kg_ontology import get_ontology
+from kg_retrieve import _seed_entities, _navigate, _candidate_chunk_ids
 
 KS = [1, 2, 3]   # rank cut-offs
 
@@ -58,6 +61,10 @@ def main():
     ap.add_argument('--merge', action=argparse.BooleanOptionalAction, default=False,
                     help='indice UNICO su tutte le sezioni (retrieval realistico, coi distrattori '
                          'cross-sezione) invece che per-sezione; ogni query ranka contro il pool intero')
+    ap.add_argument('--kg', action=argparse.BooleanOptionalAction, default=False,
+                    help='aggiunge la variante "adaptive+kg": stessi chunk adaptive, ma il ranking '
+                         'passa dal pool del grafo (seed -> naviga -> chunk delle entita\'), con '
+                         'fallback al ranking globale se il pool e\' vuoto — come kg_mode=auto')
     args = ap.parse_args()
     ai = AI(*json.loads(open(args.ai).read()))
     testset = json.load(open(args.testset, encoding='utf-8'))
@@ -108,6 +115,54 @@ def main():
                 for k in KS:
                     vhit[m][k].append(1.0 if (rank and rank <= k) else 0.0)
 
+    # ---- variante KG: stessi chunk adaptive, ranking attraverso il pool del grafo ----
+    if args.kg:
+        m = 'adaptive+kg'
+        vhit[m] = {k: [] for k in KS}
+        chunkw[m], chunktok[m], nchunks[m] = [], [], []
+        fn = METHODS['adaptive']
+        if args.merge:
+            pool = [c for tc in testset for c in fn(tc['text'], ai)]
+            units = [(pool, [(qa, tc['text']) for tc in testset for qa in tc['qa_pairs']])]
+        else:
+            units = [(fn(tc['text'], ai), [(qa, tc['text']) for qa in tc['qa_pairs']]) for tc in testset]
+
+        for chunks, queries in units:
+            if not chunks:
+                continue
+            nchunks[m].append(len(chunks))
+            chunkw[m].extend(len(c.split()) for c in chunks)
+            chunktok[m].extend(ai.e.count_tokens(c) for c in chunks)
+            cnorm = [_norm(c) for c in chunks]
+            cemb = ai.e.embed(chunks)
+            nodes = [{'ID': str(i), 'text': c, 'part_num': i, 'doc_id': 'doc'}
+                     for i, c in enumerate(chunks)]
+            kg = build_kg(ai, nodes, cemb, get_ontology())
+
+            for qa, text in queries:
+                gold = qa['unredacted_answer_text']
+                gvals = {v for v in gold_values(gold) if v in _norm(text)}
+                if not gvals:
+                    continue
+                q_emb = ai.e.embed(qa['redacted_question_text'])[0]
+                sims = (cemb / (np.linalg.norm(cemb, axis=1, keepdims=True) + 1e-9)) @ \
+                       (q_emb / (np.linalg.norm(q_emb) + 1e-9))
+                order = list(np.argsort(-sims))
+
+                # come kg_mode=auto: ranking ristretto al pool del grafo, fallback globale
+                seeds = _seed_entities(ai, qa['redacted_question_text'], kg, 3)
+                cand = _candidate_chunk_ids(kg, _navigate(kg, seeds, 1))
+                order_used = [i for i in order if str(i) in cand] if cand else order
+
+                seen, rank = set(), 0
+                for k_i, idx in enumerate(order_used, 1):
+                    seen |= {v for v in gvals if v in cnorm[idx]}
+                    if seen == gvals:
+                        rank = k_i
+                        break
+                for k in KS:
+                    vhit[m][k].append(1.0 if (rank and rank <= k) else 0.0)
+
     # ---- report ----
     nq = sum(len(tc['qa_pairs']) for tc in testset)
     print(f'\nTestset: {args.testset} [{"MERGE: indice unico" if args.merge else "no-merge: per-sezione"}] '
@@ -115,7 +170,7 @@ def main():
     hdr = (f'{"metodo":11} {"n.chunk":>7} {"parole/chunk":>12} {"token/chunk":>11}  '
            f'{"val@1":>6} {"val@2":>6} {"val@3":>6}')
     print(hdr); print('-' * len(hdr))
-    for m in METHODS:
+    for m in vhit:
         print(f'{m:11} {mean(nchunks[m]):>7.1f} {mean(chunkw[m]):>12.0f} {mean(chunktok[m]):>11.0f}  '
               f'{mean(vhit[m][1]):>6.3f} {mean(vhit[m][2]):>6.3f} {mean(vhit[m][3]):>6.3f}')
     print('\nval@k = % domande con TUTTI i valori della risposta nei primi k chunk recuperati (k=1 = subito).')
@@ -123,7 +178,7 @@ def main():
 
     # ---- save ----
     out = {}
-    for m in METHODS:
+    for m in vhit:
         out[m] = {
             'n_chunks': round(mean(nchunks[m]), 1),
             'words_per_chunk': round(mean(chunkw[m]), 1),
