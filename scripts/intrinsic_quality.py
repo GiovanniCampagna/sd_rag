@@ -24,7 +24,7 @@ Usage:
   env/Scripts/python.exe scripts/intrinsic_quality.py \
       --corpus datasets/corpus.json --ai configs/ai.config.nomic.only.json
 """
-import sys, os, json, re, argparse
+import sys, os, json, re, argparse, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 import numpy as np
 
@@ -68,8 +68,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--corpus', required=True)
     ap.add_argument('--ai', default='configs/ai.config.nomic.only.json')
-    ap.add_argument('--out', default='results/tier1_intrinsic.json',
-                    help='where to save the results (JSON + a .md table alongside)')
+    ap.add_argument('--out', default=f'tier1.{time.time()}.tmp.json',
+                    help='dove salvare i risultati (JSON + tabella .md a fianco); default: nella '
+                         'cartella corrente col timestamp, come run/eval/interrogate')
     args = ap.parse_args()
     ai = AI(*json.loads(open(args.ai).read()))
     corpus = json.load(open(args.corpus, encoding='utf-8'))

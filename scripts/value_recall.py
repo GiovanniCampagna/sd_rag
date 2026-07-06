@@ -17,7 +17,7 @@ Uso:
   env/Scripts/python.exe scripts/value_recall.py --testset datasets/testset.json \
       --out results/tier2_isp.json
 """
-import sys, os, json, re, argparse
+import sys, os, json, re, argparse, time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 import numpy as np
 
@@ -56,8 +56,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--testset', required=True)
     ap.add_argument('--ai', default='configs/ai.config.nomic.only.json')
-    ap.add_argument('--out', default='results/tier2_value_recall.json',
-                    help='dove salvare i risultati (JSON + tabella .md a fianco)')
+    ap.add_argument('--out', default=f'tier2.{time.time()}.tmp.json',
+                    help='dove salvare i risultati (JSON + tabella .md a fianco); default: nella '
+                         'cartella corrente col timestamp, come run/eval/interrogate')
     ap.add_argument('--merge', action=argparse.BooleanOptionalAction, default=False,
                     help='indice UNICO su tutte le sezioni (retrieval realistico, coi distrattori '
                          'cross-sezione) invece che per-sezione; ogni query ranka contro il pool intero')
