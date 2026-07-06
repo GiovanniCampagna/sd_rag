@@ -12,7 +12,7 @@ This is the professor's [Soggetto: ...] tag, materialised as structured metadata
 
 Anchoring uses two signals, mirroring how build_index.py binds constraints:
   - 'alias' : the entity surface form occurs literally in the chunk (symbolic, score 1.0).
-  - 'embed' : top-k chunks by cosine(entity gloss, chunk) (neural, score = cosine).
+  - 'embed' : top-k chunks by cosine(entity gloss, chunk) above embed_min_score (neural).
 """
 
 import re
@@ -26,6 +26,10 @@ from kg_ontology import Ontology
 from schemas import ChunkNode, EntityNode, EntityRelationEdge, ChunkEntityEdge, KGData
 
 log = logging.getLogger(__name__)
+
+# Aliases shorter than this (spaces excluded) are skipped by the symbolic matcher.
+# Shared by index-time anchoring (here) and query-time seeding (kg_retrieve).
+ALIAS_MIN_CHARS = 3
 
 
 def _alias_matches(alias: str, text_lower: str) -> bool:
@@ -45,7 +49,8 @@ def build_kg(
     chunk_embeddings: np.ndarray,
     ontology: Ontology,
     bind_limit: int = 8,
-    alias_min_chars: int = 3,
+    alias_min_chars: int = ALIAS_MIN_CHARS,
+    embed_min_score: float = 0.5,
     prune_orphan_entities: bool = True,
 ) -> KGData:
 
@@ -83,12 +88,17 @@ def build_kg(
     for chunk in chunks:
         chunk['subjects'] = sorted(chunk_subjects[chunk['ID']])
 
-    # 2b. embedding (neural) match — top bind_limit chunks per entity gloss
+    # 2b. embedding (neural) match — top bind_limit chunks per entity gloss, but only
+    # above embed_min_score: without a threshold every entity always anchors its
+    # bind_limit "least bad" chunks, even entities foreign to the corpus, and the
+    # candidate pool degenerates towards the whole document.
     for entity in entities.values():
         gloss_text = f"{entity['label']}. {entity['gloss']} ({', '.join(entity['aliases'][:6])})"
         gloss_embedding = ai.e.embed(gloss_text)
         chunks_and_scores = get_similarity_scores(gloss_embedding, chunks, chunk_embeddings, limit=bind_limit)
         for chunk, score in chunks_and_scores:
+            if score < embed_min_score:
+                continue
             chunk_entity_edges.append({
                 'chunk_id': chunk['ID'],
                 'entity_id': entity['ID'],
@@ -101,10 +111,17 @@ def build_kg(
     for src, rel, dst in ontology['relations']:
         if src in entities and dst in entities:
             entity_edges.append({'src_entity_id': src, 'dst_entity_id': dst, 'relation': rel})
+        else:
+            # Every concept still exists at this point (pruning runs later), so an
+            # unknown id here can only be a typo in the ontology's _RELATIONS.
+            log.warning(f'Dropped ontology relation ({src}, {rel}, {dst}): unknown concept id.')
 
     # 4. optional pruning of entities that anchor no chunk -----------------
     if prune_orphan_entities:
-        anchored = {e['entity_id'] for e in chunk_entity_edges}
+        # Only ALIAS edges count as anchoring: embed edges are similarity top-k,
+        # so they say nothing about whether the entity is actually mentioned in
+        # this corpus (an entity foreign to the document must be pruned).
+        anchored = {e['entity_id'] for e in chunk_entity_edges if e['method'] == 'alias'}
         orphans = [eid for eid in entities if eid not in anchored]
         for eid in orphans:
             del entities[eid]
@@ -112,6 +129,7 @@ def build_kg(
             e for e in entity_edges
             if e['src_entity_id'] in entities and e['dst_entity_id'] in entities
         ]
+        chunk_entity_edges = [e for e in chunk_entity_edges if e['entity_id'] in entities]
         if orphans:
             log.info(f'Pruned {len(orphans)} orphan entities: {orphans}')
 

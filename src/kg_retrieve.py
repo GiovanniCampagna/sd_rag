@@ -24,6 +24,7 @@ from collections import deque, defaultdict
 from typing import Dict, List, Set, Tuple
 
 from ai import AI, get_similarity_scores
+from build_kg import _alias_matches, ALIAS_MIN_CHARS
 from schemas import ChunkNode, KGData, SDRAGIndex
 
 log = logging.getLogger(__name__)
@@ -42,12 +43,15 @@ def _seed_entities(ai: AI, query: str, kg: KGData, n_seeds: int) -> List[str]:
     seed_ids: List[str] = [e['ID'] for e, _ in ranked[:n_seeds]]
 
     # Symbolic seeding: any entity whose alias appears literally in the query is
-    # always included (graph entry point even when embeddings disagree).
+    # always included (graph entry point even when embeddings disagree). Uses the
+    # same word-boundary matcher as the index-time anchoring: a plain substring
+    # test would fire e.g. on the alias 'cos' inside "cosa"/"così".
     query_lower = query.lower()
     for e in entities:
         if e['ID'] in seed_ids:
             continue
-        if any(a.lower() in query_lower for a in e['aliases'] if len(a) >= 3):
+        aliases = [a for a in e['aliases'] if len(a.replace(' ', '')) >= ALIAS_MIN_CHARS]
+        if any(_alias_matches(a, query_lower) for a in aliases):
             seed_ids.append(e['ID'])
 
     return seed_ids
@@ -86,7 +90,6 @@ def kg_retrieve_chunks(
     query: str,
     index: SDRAGIndex,
     limit: int,
-    mode: str,
     hops: int,
     n_seeds: int,
     alpha: float = 0.10,
@@ -111,12 +114,11 @@ def kg_retrieve_chunks(
     candidate_ids = _candidate_chunk_ids(kg, set(visited))
     log.info(
         f'KG retrieval: seeds={seeds} | visited={sorted(visited)} | '
-        f'{len(candidate_ids)} candidate chunks | mode={mode}'
+        f'{len(candidate_ids)} candidate chunks'
     )
 
-    if mode != 'auto' or not candidate_ids:
-        if mode == 'auto':
-            log.info('KG auto: empty candidate set -> plain search (off).')
+    if not candidate_ids:
+        log.info('KG auto: empty candidate set -> plain search (off).')
         return global_ranked[:limit]
 
     # --- RE-RANKER:  final = cosine + alpha * (graph_bonus / max_bonus) -------

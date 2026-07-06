@@ -174,6 +174,7 @@ def build_index(
             get_ontology(),
             bind_limit=config.get('kg_bind_limit', 8),
             alias_min_chars=config.get('kg_alias_min_chars', 3),
+            embed_min_score=config.get('kg_embed_min_score', 0.5),
             prune_orphan_entities=config.get('kg_prune_orphan_entities', True),
         )
 

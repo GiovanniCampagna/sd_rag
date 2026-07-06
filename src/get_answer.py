@@ -58,7 +58,6 @@ def get_answer(
             query,
             index,
             limit_chunks,
-            kg_mode,
             config.get('kg_hops', 1),
             config.get('kg_seed_entities', 3),
             config.get('kg_rerank_alpha', 0.10),

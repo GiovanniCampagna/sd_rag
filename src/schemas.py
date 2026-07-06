@@ -44,7 +44,7 @@ class ChunkNode(TypedDict):
     part_num: int
     doc_id: str
     # [Soggetto: ...] materialized: ontology entity ids this chunk mentions.
-    # Populated by build_kg only when use_kg=True; absent otherwise.
+    # Written by build_kg when use_kg=True (may be an empty list); absent when the KG is off.
     subjects: NotRequired[List[str]]
 
 class ChunkConstraintEdge(TypedDict):
@@ -173,7 +173,8 @@ class BuildSDRAGIndexConfig(_BuildSDRAGIndexConfigRequired, total=False):
     use_kg: bool                    # build the AISS-derived KG and attach to index (default False)
     kg_bind_limit: int              # max chunks bound to each entity by embedding similarity (default 8)
     kg_alias_min_chars: int         # ignore aliases shorter than this for substring match (default 3)
-    kg_prune_orphan_entities: bool  # drop entities with zero anchored chunks (default True)
+    kg_embed_min_score: float       # min cosine for an embed anchor edge; below it the entity does not bind the chunk (default 0.5)
+    kg_prune_orphan_entities: bool  # drop entities never alias-mentioned in the corpus (default True)
 
 class SDRAGIndex(TypedDict):
     docs: Dict[str, DocNode]
