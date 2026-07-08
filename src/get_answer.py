@@ -60,6 +60,7 @@ def get_answer(
             limit_chunks,
             config.get('kg_hops', 1),
             config.get('kg_seed_entities', 3),
+            config.get('kg_target_entities', 1),
         )
     else:
         chunks_and_scores, time_retrieve_chunks_ms = timeit(

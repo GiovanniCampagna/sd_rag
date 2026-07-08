@@ -197,12 +197,14 @@ class QueryConfig(TypedDict):
 
     # --- knowledge-graph retrieval params (optional; default behaves as 'off') ---
     # off  : pure vector search over all chunks (original behaviour).
-    # auto : restrict to the chunks anchored to the graph-navigated entities, then rank
-    #        that pool by cosine similarity with the query (same scoring as the plain
-    #        retrieval); falls back to plain search when the query anchors no entity.
+    # auto : seed -> navigate -> TARGET (the reached entity most relevant to the query)
+    #        -> pool = the target's chunks only, ranked by cosine similarity with the
+    #        query (same scoring as the plain retrieval). Falls back to plain search
+    #        when the query reaches no entity or the target anchors no chunk.
     kg_mode: NotRequired[KGMode]
     kg_hops: NotRequired[int]            # graph navigation depth from seed entities (default 1)
     kg_seed_entities: NotRequired[int]   # how many seed entities start the navigation (default 3)
+    kg_target_entities: NotRequired[int] # how many reached entities form the pool (default 1: "l'entita' che serve")
  
 class PromptLeakConfig(TypedDict, total=False):
  

@@ -1,17 +1,21 @@
 """
 Knowledge-graph retrieval (the query-time half of the hybrid approach).
 
-Flow (matches the reference diagram: query -> entity -> graph -> nearby chunks):
+Flow (matches the reference diagram: query -> entity -> graph -> the topic's chunks):
   1. SEED    : entities most relevant to the query (cosine query<->gloss + alias in query).
   2. NAVIGATE: BFS over the entity->entity skeleton up to `hops` neighbours.
-  3. COLLECT : gather the chunk_ids anchored to every visited entity (the candidate pool).
-  4. RANK    : score the pool by cosine similarity to the query, exactly like the plain
-               retrieval — the graph only decides WHICH chunks compete, not how they score.
+  3. TARGET  : among ALL reached entities (seeds + navigated), pick the n_targets most
+               similar to the query — "l'entita' che serve a rispondere". Navigation only
+               widens the candidates (e.g. query mentions aircraft -> refuelling_event is
+               reachable and wins as target); it does NOT pour every visited entity's
+               chunks into the pool, which would blow the pool up to the whole corpus.
+  4. POOL+RANK: pool = chunks anchored to the target(s) ONLY, ranked by cosine similarity
+               to the query, exactly like the plain retrieval.
 
 Modes:
   off  : pure vector search over all chunks (handled by the caller, not here).
-  auto : restrict to the graph pool, rank it by cosine; fall back to plain search over
-         all chunks when the query anchors no entity (empty pool) —
+  auto : the flow above; falls back to plain search over all chunks when the query
+         anchors no entity or the target anchors no chunk —
          "se trovo bene, altrimenti il solito metodo".
 
 NOTE: a graph-bonus re-ranker (final = cosine + alpha * IDF-weighted entity overlap)
@@ -30,13 +34,17 @@ from schemas import ChunkNode, KGData, SDRAGIndex
 log = logging.getLogger(__name__)
 
 
+def _gloss(e) -> str:
+    return f"{e['label']}. {e['gloss']} ({', '.join(e['aliases'][:6])})"
+
+
 def _seed_entities(ai: AI, query: str, kg: KGData, n_seeds: int) -> List[str]:
     """Return ids of the n_seeds entities most relevant to the query."""
     entities = list(kg['entities'].values())
     if not entities:
         return []
 
-    gloss_texts = [f"{e['label']}. {e['gloss']} ({', '.join(e['aliases'][:6])})" for e in entities]
+    gloss_texts = [_gloss(e) for e in entities]
     gloss_embeddings = ai.e.embed(gloss_texts)
     query_embedding = ai.e.embed(query)
     ranked = get_similarity_scores(query_embedding, entities, gloss_embeddings, limit=len(entities))
@@ -91,6 +99,7 @@ def kg_retrieve_chunks(
     limit: int,
     hops: int,
     n_seeds: int,
+    n_targets: int = 1,
 ) -> List[Tuple[ChunkNode, float]]:
     """Graph-driven chunk retrieval. Returns chunks_and_scores like retrieve_chunks."""
 
@@ -105,15 +114,27 @@ def kg_retrieve_chunks(
 
     seeds = _seed_entities(ai, query, kg, n_seeds)
     visited = _navigate(kg, seeds, hops)
-    candidate_ids = _candidate_chunk_ids(kg, visited)
+
+    if not visited:
+        # "se non c'e' corrispondenza passa a off": plain search over all chunks
+        log.info('KG auto: no entity reached -> plain search (off).')
+        return get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=limit)
+
+    # TARGET: among every reached entity, the n_targets most relevant to the query.
+    # The pool comes from the TARGET's chunks only: pooling every visited entity's
+    # chunks would inflate the pool towards the whole corpus (measured: 55/58).
+    reached = [kg['entities'][eid] for eid in visited]
+    gloss_embeddings = ai.e.embed([_gloss(e) for e in reached])
+    ranked_entities = get_similarity_scores(query_embedding, reached, gloss_embeddings, limit=n_targets)
+    targets = {e['ID'] for e, _ in ranked_entities}
+    candidate_ids = _candidate_chunk_ids(kg, targets)
     log.info(
         f'KG retrieval: seeds={seeds} | visited={sorted(visited)} | '
-        f'{len(candidate_ids)} candidate chunks'
+        f'targets={sorted(targets)} | {len(candidate_ids)} candidate chunks'
     )
 
     if not candidate_ids:
-        # "se non c'e' corrispondenza passa a off": plain search over all chunks
-        log.info('KG auto: empty candidate set -> plain search (off).')
+        log.info('KG auto: target anchors no chunk -> plain search (off).')
         return get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=limit)
 
     # The graph only restricted the pool; scoring is plain cosine, as in retrieve_chunks.
