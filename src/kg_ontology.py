@@ -84,8 +84,8 @@ _CONCEPTS: List[OntologyConcept] = [
         'label': 'Emergenza (sversamento/incendio)',
         'type': 'isp18:Extension',
         'aliases': ['emergenza', 'emergenze', 'incendio', 'sversamento', 'spandimento', 'sgombero',
-                    'evacuazione', 'allarme', 'fuga di carburante'],
-        'gloss': "Situazioni di emergenza nel rifornimento: sversamento di carburante, incendio, evacuazione.",
+                    'evacuazione', 'allarme', 'fuga di carburante', 'piano di emergenza'],
+        'gloss': "Situazioni di emergenza nel rifornimento e piano di emergenza aeroportuale: sversamento di carburante, incendio, evacuazione, incidente.",
     },
 
     # === PHYSICAL OBJECTS (aiss:involves) ===================================
@@ -148,8 +148,9 @@ _CONCEPTS: List[OntologyConcept] = [
         'label': 'Operatore torre / COS',
         'type': 'aiss:ControlTowerOperator',
         'aliases': ['torre di controllo', 'control tower', 'operatore di torre', 'cos',
-                    'centro operativo di scalo', 'centro operativo', 'sala operativa'],
-        'gloss': "Coordinamento operativo dello scalo (torre di controllo / Centro Operativo di Scalo, COS).",
+                    'centro operativo di scalo', 'centro operativo', 'sala operativa',
+                    'coordinamento di scalo', 'coordinamento scalo'],
+        'gloss': "Coordinamento operativo dello scalo (torre di controllo / Centro Operativo di Scalo, COS, Coordinamento di Scalo).",
     },
     {
         'id': 'comandante',

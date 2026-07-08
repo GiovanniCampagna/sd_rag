@@ -29,8 +29,7 @@ from make_chunks_structural_semantic import make_chunks_structural_semantic
 from make_chunks_adaptive import make_chunks_adaptive
 from build_kg import build_kg
 from kg_ontology import get_ontology
-from kg_retrieve import _seed_entities, _navigate, _candidate_chunk_ids, _gloss
-from ai import get_similarity_scores
+from kg_retrieve import _seed_entities, _navigate, _candidate_chunk_ids
 
 KS = [1, 2, 3]   # rank cut-offs
 
@@ -151,16 +150,12 @@ def main():
                        (q_emb / (np.linalg.norm(q_emb) + 1e-9))
                 order = list(np.argsort(-sims))
 
-                # come kg_mode=auto: seed -> naviga -> TARGET (entita' piu' pertinente
-                # alla query tra le raggiunte) -> pool = SOLO i chunk del target
+                # come kg_mode=auto: pool = chunk delle ENTITA' DELLA QUERY (tutti i
+                # seed); navigazione solo come fallback se i seed non ancorano nulla
                 seeds = _seed_entities(ai, qa['redacted_question_text'], kg, 3)
-                visited = _navigate(kg, seeds, 1)
-                cand = set()
-                if visited:
-                    reached = [kg['entities'][e] for e in visited]
-                    ge = ai.e.embed([_gloss(e) for e in reached])
-                    tgt = get_similarity_scores(q_emb, reached, ge, limit=1)[0][0]['ID']
-                    cand = _candidate_chunk_ids(kg, {tgt})
+                cand = _candidate_chunk_ids(kg, set(seeds))
+                if not cand and seeds:
+                    cand = _candidate_chunk_ids(kg, _navigate(kg, seeds, 1))
                 order_used = [i for i in order if str(i) in cand] if cand else order
 
                 seen, rank = set(), 0

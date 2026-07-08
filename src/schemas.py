@@ -43,7 +43,7 @@ class ChunkNode(TypedDict):
     text: str
     part_num: int
     doc_id: str
-    # [Soggetto: ...] materialized: ontology entity ids this chunk mentions.
+    # [Soggetto: ...]: ontology entity ids this chunk mentions.
     # Written by build_kg when use_kg=True (may be an empty list); absent when the KG is off.
     subjects: NotRequired[List[str]]
 
@@ -197,14 +197,13 @@ class QueryConfig(TypedDict):
 
     # --- knowledge-graph retrieval params (optional; default behaves as 'off') ---
     # off  : pure vector search over all chunks (original behaviour).
-    # auto : seed -> navigate -> TARGET (the reached entity most relevant to the query)
-    #        -> pool = the target's chunks only, ranked by cosine similarity with the
-    #        query (same scoring as the plain retrieval). Falls back to plain search
-    #        when the query reaches no entity or the target anchors no chunk.
+    # auto : pool = chunks of the QUERY'S entities (alias in query + top-n by gloss
+    #        similarity; a multi-fact query spans several). Navigation is only the
+    #        topic-finding fallback when the query's entities anchor no chunk. Ranking
+    #        is plain cosine on the pool; plain search if nothing anchors.
     kg_mode: NotRequired[KGMode]
-    kg_hops: NotRequired[int]            # graph navigation depth from seed entities (default 1)
-    kg_seed_entities: NotRequired[int]   # how many seed entities start the navigation (default 3)
-    kg_target_entities: NotRequired[int] # how many reached entities form the pool (default 1: "l'entita' che serve")
+    kg_hops: NotRequired[int]            # navigation depth of the topic-finding fallback (default 1)
+    kg_seed_entities: NotRequired[int]   # how many neural seeds beyond the alias-matched ones (default 3)
  
 class PromptLeakConfig(TypedDict, total=False):
  

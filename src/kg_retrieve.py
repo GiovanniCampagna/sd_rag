@@ -2,20 +2,20 @@
 Knowledge-graph retrieval (the query-time half of the hybrid approach).
 
 Flow (matches the reference diagram: query -> entity -> graph -> the topic's chunks):
-  1. SEED    : entities most relevant to the query (cosine query<->gloss + alias in query).
-  2. NAVIGATE: BFS over the entity->entity skeleton up to `hops` neighbours.
-  3. TARGET  : among ALL reached entities (seeds + navigated), pick the n_targets most
-               similar to the query — "l'entita' che serve a rispondere". Navigation only
-               widens the candidates (e.g. query mentions aircraft -> refuelling_event is
-               reachable and wins as target); it does NOT pour every visited entity's
-               chunks into the pool, which would blow the pool up to the whole corpus.
-  4. POOL+RANK: pool = chunks anchored to the target(s) ONLY, ranked by cosine similarity
-               to the query, exactly like the plain retrieval.
+  1. SEED : the QUERY'S entities (alias literally in the query + top-n by cosine
+            query<->gloss). Multi-fact queries legitimately have several entities.
+  2. POOL : chunks anchored to the query's entities ONLY. Navigated neighbours do NOT
+            contribute chunks — pooling every visited entity's chunks was measured to
+            blow the pool up towards the whole corpus (55/58).
+  3. NAVIGATE (fallback only): if the query's entities anchor no chunk, walk `hops`
+            steps to find the topic (e.g. a query naming only the aircraft can reach
+            refuelling_event) and pool from the reached entities.
+  4. RANK : cosine similarity to the query over the pool, exactly like plain retrieval.
 
 Modes:
   off  : pure vector search over all chunks (handled by the caller, not here).
-  auto : the flow above; falls back to plain search over all chunks when the query
-         anchors no entity or the target anchors no chunk —
+  auto : the flow above; falls back to plain search over all chunks when no entity
+         (even after navigation) anchors any chunk —
          "se trovo bene, altrimenti il solito metodo".
 
 NOTE: a graph-bonus re-ranker (final = cosine + alpha * IDF-weighted entity overlap)
@@ -99,7 +99,6 @@ def kg_retrieve_chunks(
     limit: int,
     hops: int,
     n_seeds: int,
-    n_targets: int = 1,
 ) -> List[Tuple[ChunkNode, float]]:
     """Graph-driven chunk retrieval. Returns chunks_and_scores like retrieve_chunks."""
 
@@ -113,28 +112,24 @@ def kg_retrieve_chunks(
         return get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=limit)
 
     seeds = _seed_entities(ai, query, kg, n_seeds)
-    visited = _navigate(kg, seeds, hops)
 
-    if not visited:
-        # "se non c'e' corrispondenza passa a off": plain search over all chunks
-        log.info('KG auto: no entity reached -> plain search (off).')
-        return get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=limit)
+    # POOL: chunks of the QUERY'S entities only (all of them: a multi-fact query
+    # legitimately spans several entities). Navigated neighbours do not contribute.
+    candidate_ids = _candidate_chunk_ids(kg, set(seeds))
+    used = 'seeds'
 
-    # TARGET: among every reached entity, the n_targets most relevant to the query.
-    # The pool comes from the TARGET's chunks only: pooling every visited entity's
-    # chunks would inflate the pool towards the whole corpus (measured: 55/58).
-    reached = [kg['entities'][eid] for eid in visited]
-    gloss_embeddings = ai.e.embed([_gloss(e) for e in reached])
-    ranked_entities = get_similarity_scores(query_embedding, reached, gloss_embeddings, limit=n_targets)
-    targets = {e['ID'] for e, _ in ranked_entities}
-    candidate_ids = _candidate_chunk_ids(kg, targets)
-    log.info(
-        f'KG retrieval: seeds={seeds} | visited={sorted(visited)} | '
-        f'targets={sorted(targets)} | {len(candidate_ids)} candidate chunks'
-    )
+    if not candidate_ids and seeds:
+        # Topic-finding fallback: the query's entities anchor nothing, walk the graph
+        # to reach the topic (e.g. aircraft -> refuelling_event).
+        visited = _navigate(kg, seeds, hops)
+        candidate_ids = _candidate_chunk_ids(kg, visited)
+        used = f'navigated({sorted(visited)})'
+
+    log.info(f'KG retrieval: seeds={seeds} | pool from {used} | {len(candidate_ids)} candidate chunks')
 
     if not candidate_ids:
-        log.info('KG auto: target anchors no chunk -> plain search (off).')
+        # "se non c'e' corrispondenza passa a off": plain search over all chunks
+        log.info('KG auto: no anchored entity -> plain search (off).')
         return get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=limit)
 
     # The graph only restricted the pool; scoring is plain cosine, as in retrieve_chunks.
