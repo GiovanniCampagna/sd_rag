@@ -29,7 +29,7 @@ from make_chunks_structural_semantic import make_chunks_structural_semantic
 from make_chunks_adaptive import make_chunks_adaptive
 from build_kg import build_kg
 from kg_ontology import get_ontology
-from kg_retrieve import _seed_entities, _navigate, _candidate_chunk_ids
+from kg_retrieve import _seed_entities, _navigate, _candidate_chunk_ids, _named_entities
 
 KS = [1, 2, 3]   # rank cut-offs
 
@@ -150,12 +150,17 @@ def main():
                        (q_emb / (np.linalg.norm(q_emb) + 1e-9))
                 order = list(np.argsort(-sims))
 
-                # come kg_mode=auto: pool = chunk delle ENTITA' DELLA QUERY (tutti i
-                # seed); navigazione solo come fallback se i seed non ancorano nulla
-                seeds = _seed_entities(ai, qa['redacted_question_text'], kg, 3)
-                cand = _candidate_chunk_ids(kg, set(seeds))
-                if not cand and seeds:
-                    cand = _candidate_chunk_ids(kg, _navigate(kg, seeds, 1))
+                # come kg_mode=auto: GATE in-dominio (la query deve NOMINARE un'entita',
+                # altrimenti fuori-dominio -> plain); poi pool = chunk delle ENTITA' DELLA
+                # QUERY (tutti i seed), navigazione solo come fallback se i seed non ancorano
+                q_txt = qa['redacted_question_text']
+                if not _named_entities(q_txt, kg):
+                    cand = set()
+                else:
+                    seeds = _seed_entities(ai, q_txt, kg, 3)
+                    cand = _candidate_chunk_ids(kg, set(seeds))
+                    if not cand and seeds:
+                        cand = _candidate_chunk_ids(kg, _navigate(kg, seeds, 1))
                 order_used = [i for i in order if str(i) in cand] if cand else order
 
                 seen, rank = set(), 0

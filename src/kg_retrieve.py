@@ -2,8 +2,11 @@
 Knowledge-graph retrieval (the query-time half of the hybrid approach).
 
 Flow (matches the reference diagram: query -> entity -> graph -> the topic's chunks):
-  1. SEED : the QUERY'S entities (alias literally in the query + top-n by cosine
-            query<->gloss). Multi-fact queries legitimately have several entities.
+  0. GATE : the query must NAME at least one ontology entity (an alias appears in it).
+            If it names none it is off-domain for this ontology (e.g. a marshalling
+            question against the refuelling ontology) -> fall back to plain search.
+  1. SEED : the QUERY'S entities (named + top-n by cosine query<->gloss). Multi-fact
+            queries legitimately have several entities.
   2. POOL : chunks anchored to the query's entities ONLY. Navigated neighbours do NOT
             contribute chunks — pooling every visited entity's chunks was measured to
             blow the pool up towards the whole corpus (55/58).
@@ -14,9 +17,8 @@ Flow (matches the reference diagram: query -> entity -> graph -> the topic's chu
 
 Modes:
   off  : pure vector search over all chunks (handled by the caller, not here).
-  auto : the flow above; falls back to plain search over all chunks when no entity
-         (even after navigation) anchors any chunk —
-         "se trovo bene, altrimenti il solito metodo".
+  auto : the flow above; falls back to plain search when the query is off-domain (names
+         no entity) or no entity anchors any chunk — "se trovo bene, altrimenti il solito metodo".
 
 NOTE: a graph-bonus re-ranker (final = cosine + alpha * IDF-weighted entity overlap)
 was implemented and measured (git 0661a6b), then deliberately reverted: the chosen
@@ -38,6 +40,20 @@ def _gloss(e) -> str:
     return f"{e['label']}. {e['gloss']} ({', '.join(e['aliases'][:6])})"
 
 
+def _named_entities(query: str, kg: KGData) -> List[str]:
+    """Ids of entities NAMED in the query: an alias appears literally in the query
+    text. Uses the same word-boundary matcher as the index-time anchoring, so the
+    alias 'cos' does not fire inside "cosa"/"così". Doubles as the in-domain gate —
+    a query that names no ontology entity is off-domain (see kg_retrieve_chunks)."""
+    query_lower = query.lower()
+    named: List[str] = []
+    for e in kg['entities'].values():
+        aliases = [a for a in e['aliases'] if len(a.replace(' ', '')) >= ALIAS_MIN_CHARS]
+        if any(_alias_matches(a, query_lower) for a in aliases):
+            named.append(e['ID'])
+    return named
+
+
 def _seed_entities(ai: AI, query: str, kg: KGData, n_seeds: int) -> List[str]:
     """Return ids of the n_seeds entities most relevant to the query."""
     entities = list(kg['entities'].values())
@@ -50,17 +66,11 @@ def _seed_entities(ai: AI, query: str, kg: KGData, n_seeds: int) -> List[str]:
     ranked = get_similarity_scores(query_embedding, entities, gloss_embeddings, limit=len(entities))
     seed_ids: List[str] = [e['ID'] for e, _ in ranked[:n_seeds]]
 
-    # Symbolic seeding: any entity whose alias appears literally in the query is
-    # always included (graph entry point even when embeddings disagree). Uses the
-    # same word-boundary matcher as the index-time anchoring: a plain substring
-    # test would fire e.g. on the alias 'cos' inside "cosa"/"così".
-    query_lower = query.lower()
-    for e in entities:
-        if e['ID'] in seed_ids:
-            continue
-        aliases = [a for a in e['aliases'] if len(a.replace(' ', '')) >= ALIAS_MIN_CHARS]
-        if any(_alias_matches(a, query_lower) for a in aliases):
-            seed_ids.append(e['ID'])
+    # Symbolic seeding: entities NAMED in the query (alias present) are always added,
+    # even when the embeddings disagree — the reliable graph entry points.
+    for eid in _named_entities(query, kg):
+        if eid not in seed_ids:
+            seed_ids.append(eid)
 
     return seed_ids
 
@@ -109,6 +119,16 @@ def kg_retrieve_chunks(
 
     if not kg:
         log.warning('kg_retrieve_chunks called but index has no KG; using global vector search.')
+        return get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=limit)
+
+    # IN-DOMAIN GATE: trust the graph only if the query NAMES at least one ontology
+    # entity (an alias appears in it). A query that names nothing is off-domain for this
+    # ontology (e.g. a marshalling question against the refuelling ontology): a
+    # neural-only pool would mis-target and hurt, so fall back to plain search. Once the
+    # gate passes, the neural seeds still enrich the pool — a named entity activates the
+    # graph, meaning brings in the related ones (e.g. VVF for "servizi di emergenza").
+    if not _named_entities(query, kg):
+        log.info('KG auto: query names no ontology entity (off-domain) -> plain search (off).')
         return get_similarity_scores(query_embedding, all_chunks, all_embeddings, limit=limit)
 
     seeds = _seed_entities(ai, query, kg, n_seeds)

@@ -197,10 +197,11 @@ class QueryConfig(TypedDict):
 
     # --- knowledge-graph retrieval params (optional; default behaves as 'off') ---
     # off  : pure vector search over all chunks (original behaviour).
-    # auto : pool = chunks of the QUERY'S entities (alias in query + top-n by gloss
-    #        similarity; a multi-fact query spans several). Navigation is only the
-    #        topic-finding fallback when the query's entities anchor no chunk. Ranking
-    #        is plain cosine on the pool; plain search if nothing anchors.
+    # auto : in-domain gate (the query must NAME an ontology entity, else plain search),
+    #        then pool = chunks of the QUERY'S entities (named + top-n by gloss; a
+    #        multi-fact query spans several). Navigation is only the topic-finding
+    #        fallback when those entities anchor no chunk. Ranking is plain cosine on the
+    #        pool; plain search when the query is off-domain or nothing anchors.
     kg_mode: NotRequired[KGMode]
     kg_hops: NotRequired[int]            # navigation depth of the topic-finding fallback (default 1)
     kg_seed_entities: NotRequired[int]   # how many neural seeds beyond the alias-matched ones (default 3)
